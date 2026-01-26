@@ -1,10 +1,5 @@
-export class GlobalErrorHandler {
-    /**
-     * @param {unknown} error 
-     * @returns {{ statusCode: number, body: string }}
-     */
+export class GlobalExceptionHandler {
     static forError(error) {
-        /** @type {Error} */
         const exception = error instanceof Error ? error : new Error("Non-error thrown");
         console.error([
             "=".repeat(64),
@@ -19,7 +14,7 @@ export class GlobalErrorHandler {
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: "Internal Server Error."
+                message: "Internal Server Error"
             })
         };
     }
