@@ -5,7 +5,7 @@ export declare abstract class ApplicationRepository {
     protected _requiredEnvVars: string[];
     protected _environment: Map<string, string>;
 
-    constructor(documentClient: DynamoDBDocumentClient);
+    protected constructor(documentClient: DynamoDBDocumentClient);
     
     public setEnvironment(environment: NodeJS.ProcessEnv);
 

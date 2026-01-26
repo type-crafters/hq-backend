@@ -1,15 +1,15 @@
 import type { UUID } from "crypto";
 
 declare interface UserArgs {
-    public id: UUID;
-    public createdAt: Date;
-    public email: string;
-    public firstTimePassword: boolean;
-    public fullName: string;
-    public lastUpdatedAt: Date;
-    public password: string;
-    public profilePictureUrl: string;
-    public roles: Set<string>;
+    id: UUID;
+    createdAt: Date;
+    email: string;
+    firstTimePassword: boolean;
+    fullName: string;
+    lastUpdatedAt: Date;
+    password: string;
+    profilePictureUrl: string;
+    roles: Set<string>;
 }
 
 declare interface CreateUserRequest {
@@ -36,15 +36,15 @@ declare interface UserItem {
 export declare class User {
     private static EMPTY_IMAGE_KEY: string;
 
-    public id: UUID;
-    public createdAt: Date;
-    public email: string;
-    public firstTimePassword: boolean;
-    public fullName: string;
-    public lastUpdatedAt: Date;
-    public password: string;
-    public profilePictureUrl: string;
-    public roles: Set<string>;
+    id: UUID;
+    createdAt: Date;
+    email: string;
+    firstTimePassword: boolean;
+    fullName: string;
+    lastUpdatedAt: Date;
+    password: string;
+    profilePictureUrl: string;
+    roles: Set<string>;
 
     constructor({
         id,
@@ -58,7 +58,7 @@ export declare class User {
         roles,
     }: UserArgs);
 
-    public static fromCreateRequest(body: CreateUserRequest): User;
+    static fromCreateRequest(body: CreateUserRequest): User;
 
-    public static fromItem(Item): User;
+    static fromItem(Item: UserItem): User;
 }

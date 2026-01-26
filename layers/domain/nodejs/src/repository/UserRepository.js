@@ -14,7 +14,7 @@ export class UserRepository extends ApplicationRepository {
         try {
             await this._documentClient.send(new PutCommand({
                 TableName: this._environment.get("USER_TABLE"),
-                Item: user
+                Item: {...user}
             }));
 
             return user;
