@@ -1,3 +1,4 @@
+import type { Mapper, Supplier } from "../types";
 import type { UUID } from "crypto";
 
 declare interface UserArgs {
@@ -52,7 +53,7 @@ export declare class User {
     profilePictureUrl: string;
     roles: Set<string>;
 
-    public getClaims(): UserClaims;
+    public getClaims: Supplier<UserClaims>;
 
     constructor({
         id,
@@ -66,7 +67,7 @@ export declare class User {
         roles,
     }: UserArgs);
 
-    static fromCreateRequest(body: CreateUserRequest): User;
+    static fromCreateRequest: Mapper<CreateUserRequest, User>;
 
-    static fromItem(Item: UserItem): User;
+    static fromItem: Mapper<UserItem, User>;
 }

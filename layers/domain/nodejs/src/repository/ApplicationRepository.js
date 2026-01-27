@@ -1,4 +1,4 @@
-import { assert } from "assert";
+import assert from "assert";
 
 export class ApplicationRepository {
     _documentClient;
@@ -15,14 +15,14 @@ export class ApplicationRepository {
     
     setEnvironment(environment) {
         this._requiredEnvVars.forEach(variable => {
-            assert.ok(environment[variable], `Missing required variable '${variable}' in execution environment.`);
+            assert(environment[variable], `Missing required variable '${variable}' in execution environment.`);
             this._environment.set(variable, environment[variable]);
         });
     }
 
     _checkEnvionment() {
         this._requiredEnvVars.forEach(variable => {
-            assert.ok(this._environment.get(variable), `Missing required variable '${variable}' in internal definition.`);
+            assert(this._environment.get(variable), `Missing required variable '${variable}' in internal definition.`);
         });
     }
 }

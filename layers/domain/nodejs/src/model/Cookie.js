@@ -1,3 +1,53 @@
+import assert from "assert";
+
+class CookieGetter {
+    #name;
+    #value;
+
+    constructor(name) {
+        this.#name = name;
+    }
+
+    from(cookie) {
+        assert(this.#name, "Called CookieGetter::from without providing a cookie name.")
+
+        const cookies = cookie.split(";").map(c => c.trim()).filter(c => !!c);
+        const thisCookie = cookies.find(c => c.split("=")[0].trim() === this.#name);
+
+        assert(thisCookie, "Cookie with provided name '" + this.#name + "' was not found.");
+
+        this.#value = decodeURIComponent(thisCookie.split("=").slice(1).join("="));
+        return this;
+    }
+
+    asString() {
+        assert(this.#value, "Missing value for cookie '" + this.#name + "'.");
+        return `${this.#value}`;
+    }
+
+    asInt() {
+        assert(this.#value, "Missing value for cookie '" + this.#name + "'.");
+        const int = parseInt(this.#value);
+        assert(int, "Parsed string resolved to NaN.");
+        return int;
+    }
+
+    asFloat() {
+        assert(this.#value, "Missing value for cookie '" + this.#name + "'.");
+        const float = parseFloat(this.#value);
+        assert(float, "Parsed string resolved to NaN.");
+        return float;
+    }
+
+    asBoolean() {
+        assert(this.#value, "Missing value for cookie '" + this.#name + "'.");
+        if (["true", "false"].includes(this.#value)) {
+            return value === "true";
+        }
+        throw new TypeError("Attempted casting cookie value to boolean but failed.")
+    }
+}
+
 class CookieBuilder {
     #_name;
     #_value;
@@ -67,7 +117,6 @@ class CookieBuilder {
             maxAge: this.#_maxAge
         });
     }
-
 }
 
 export class Cookie {
@@ -97,7 +146,7 @@ export class Cookie {
         }
 
         if (sameSite && !["Strict", "Lax", "None"].includes(sameSite)) {
-            throw new TypeError("A cookie's SameSite attribute must be one either Strict, Lax, or None");
+            throw new TypeError("A cookie's SameSite attribute must be either 'Strict', 'Lax', or 'None'.");
         }
 
         if (sameSite === "None" && secure !== true) {
@@ -116,6 +165,10 @@ export class Cookie {
 
     static builder() {
         return new CookieBuilder();
+    }
+
+    static get(name) {
+        return new CookieGetter(name);
     }
 
     toString() {
@@ -151,5 +204,4 @@ export class Cookie {
 
         return str;
     }
-
 }

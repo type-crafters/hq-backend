@@ -1,6 +1,8 @@
 export { AccessToken } from "./model/AccessToken";
-export { AuthToken } from "./model/AuthToken";
 export { ApplicationRepository } from "./repository/ApplicationRepository";
+export { AuthToken } from "./model/AuthToken";
+export { Cookie } from "./model/Cookie";
+export { RefreshToken } from "./model/RefreshToken";
 export { RefreshTokenRepository } from "./repository/RefreshTokenRepository";
 export { RepositoryError } from "./error/RepositoryError";
 export { User } from "./model/User";

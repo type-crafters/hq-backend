@@ -1,3 +1,4 @@
+import { Mapper, Supplier } from "../types";
 import { AuthToken } from "./AuthToken";
 
 export declare interface AccessTokenArgs {
@@ -7,6 +8,17 @@ export declare interface AccessTokenArgs {
     iat: Date;
     roles: string[];
     sub: string;
+}
+
+export declare interface AccessTokenJSONSchema {
+    jti: string;
+    email: string;
+    exp: number;
+    iat: number;
+    iss: string;
+    roles: string[];
+    sub: string;
+    typ: "access";
 }
 
 export declare interface AccessTokenClaims {
@@ -22,7 +34,9 @@ export declare class AccessToken extends AuthToken {
     roles: string;
     override typ: "access";
 
-    public static fromClaims(claims: AccessTokenClaims): AccessToken;
+    public toJSON: Supplier<AccessTokenJSONSchema>;
+
+    public static fromClaims: Mapper<AccessTokenClaims, AccessToken>;
 
     constructor({
         jti,

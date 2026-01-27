@@ -1,3 +1,4 @@
+import { Mapper, Supplier } from "../types";
 import { AuthToken } from "./AuthToken";
 
 export declare interface RefreshTokenArgs {
@@ -7,14 +8,13 @@ export declare interface RefreshTokenArgs {
     sub: string;
 }
 
-export declare interface RefreshTokenItem {
+export declare interface RefreshTokenJSONSchema {
     jti: string;
     exp: number;
     iat: number;
     iss: string;
     sub: string;
-    typ: "access" | "refresh";
-    [key: string]: unknown;
+    typ: "refresh";
 }
 
 export declare interface RefreshTokenClaims {
@@ -22,7 +22,6 @@ export declare interface RefreshTokenClaims {
     iat: Date;
     sub: string;
 }
-
 
 export declare class RefreshToken extends AuthToken {
     constructor({
@@ -32,7 +31,7 @@ export declare class RefreshToken extends AuthToken {
         sub
     }: RefreshTokenArgs);
 
-    public toItem(): RefreshTokenItem;
+    public toJSON: Supplier<RefreshTokenJSONSchema>;
 
-    public static fromClaims(claims: RefreshTokenClaims): RefreshToken;
+    public static fromClaims: Mapper<RefreshTokenClaims, RefreshToken>;
 }

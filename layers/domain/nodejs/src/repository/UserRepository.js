@@ -56,7 +56,7 @@ export class UserRepository extends ApplicationRepository {
                     "#email": "email"
                 },
                 ExpressionAttributeValues: {
-                    ":email": email
+                    ":email": email.toLowerCase()
                 }
             }));
 

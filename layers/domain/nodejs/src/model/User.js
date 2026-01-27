@@ -55,7 +55,7 @@ export class User {
         return new User({
             id: randomUUID(),
             createdAt: now,
-            email,
+            email: email.toLowerCase(),
             firstTimePassword: true,
             fullName,
             lastUpdatedAt: now,

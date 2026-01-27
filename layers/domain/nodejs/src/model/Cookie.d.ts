@@ -1,3 +1,17 @@
+import { Supplier } from "../types";
+
+declare class CookieGetter {
+    private name: string;
+
+    constructor(name: string);
+
+    public from(cookie: string): this;
+    public asString(): string;
+    public asInt(): number;
+    public asFloat(): number;
+    public asBoolean(): boolean;
+}
+
 declare class CookieBuilder {
     private _name: string;
     private _value: string;
@@ -22,7 +36,7 @@ declare class CookieBuilder {
     public build(): Cookie;
 }
 
-export declare interface CookieOptions {
+export declare interface CookieArgs {
     name: string;
     value: string;
     httpOnly?: boolean;
@@ -34,7 +48,7 @@ export declare interface CookieOptions {
     maxAge?: number;
 }
 
-export class Cookie {
+export declare class Cookie {
     constructor({
         name,
         value,
@@ -45,9 +59,10 @@ export class Cookie {
         sameSite,
         expires,
         maxAge
-    }: CookieOptions);
+    }: CookieArgs);
 
-    static builder(): CookieBuilder;
+    static get(name: string): CookieGetter;
+    static builder: Supplier<CookieBuilder>;
 
     toString(): string;
 }

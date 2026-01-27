@@ -15,7 +15,20 @@ const handler = async (event) => {
     };  // TODO obtain from auth token 
 
     try {
-        const body = JSON.parse(event.body);
+        let body;
+        try {
+            body = JSON.parse(event.body);
+        } catch {
+            return {
+                statusCode: 400,
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: "Malformed JSON body"
+                })
+            }
+        }
         if (!body || !Object.keys(body).length) {
             return {
                 statusCode: 400,

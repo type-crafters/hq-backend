@@ -1,4 +1,4 @@
-import { creeateHmac } from "crypto";
+import { randomUUID } from "crypto";
 import { AuthToken } from "./AuthToken";
 
 export class RefreshToken extends AuthToken {
@@ -12,7 +12,7 @@ export class RefreshToken extends AuthToken {
         this.typ = "refresh";
     }
 
-    toItem() {
+    toJSON() {
         return {
             jti: this.jti,
             exp: Math.floor(this.exp.getTime() / 1000),
@@ -30,10 +30,10 @@ export class RefreshToken extends AuthToken {
             sub
         } = claims;
 
-        return new AccessToken({
+        return new RefreshToken({
             jti: randomUUID(),
-            exp,
-            iat,
+            exp: new Date(typeof exp === "number" ? exp * 1000 : exp),
+            iat: new Date(typeof iat === "number" ? iat * 1000 : iat),
             sub
         });
     }
