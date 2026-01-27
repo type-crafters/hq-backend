@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { AuthToken } from "./AuthToken";
 
 export class AccessToken extends AuthToken {
@@ -16,5 +17,24 @@ export class AccessToken extends AuthToken {
         this.email = email;
         this.roles = roles;
         this.typ = "access";
+    }
+
+    static fromClaims(claims) {
+        const {
+            email,
+            exp,
+            iat,
+            roles,
+            sub
+        } = claims;
+
+        return new AccessToken({
+            jti: randomUUID(),
+            email,
+            exp,
+            iat,
+            roles,
+            sub
+        });
     }
 }

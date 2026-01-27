@@ -34,6 +34,14 @@ export class User {
         this.roles = roles;
     }
 
+    getClaims() {
+        return {
+            sub: this.id,
+            email,
+            roles: Array.from(roles)
+        }
+    }
+
     static fromCreateRequest(body) {
         const {
             email,

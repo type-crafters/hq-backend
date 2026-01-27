@@ -22,4 +22,19 @@ export class RefreshToken extends AuthToken {
             typ: this.typ
         };
     }
+
+    static fromClaims(claims) {
+        const {
+            exp,
+            iat,
+            sub
+        } = claims;
+
+        return new AccessToken({
+            jti: randomUUID(),
+            exp,
+            iat,
+            sub
+        });
+    }
 }

@@ -17,6 +17,12 @@ export declare interface RefreshTokenItem {
     [key: string]: unknown;
 }
 
+export declare interface RefreshTokenClaims {
+    exp: Date;
+    iat: Date;
+    sub: string;
+}
+
 
 export declare class RefreshToken extends AuthToken {
     constructor({
@@ -25,4 +31,8 @@ export declare class RefreshToken extends AuthToken {
         iat,
         sub
     }: RefreshTokenArgs);
+
+    public toItem(): RefreshTokenItem;
+
+    public static fromClaims(claims: RefreshTokenClaims): RefreshToken;
 }

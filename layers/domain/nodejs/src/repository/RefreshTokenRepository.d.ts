@@ -13,5 +13,5 @@ export class RefreshTokenRepository extends ApplicationRepository {
 
     public revokeByJti(jti: string): Promise<true | null>;
 
-    public revokeAllBySub(sub: string): number;
+    public revokeAllBySub(sub: string): Promise<number>;
 }

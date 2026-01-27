@@ -12,6 +12,12 @@ declare interface UserArgs {
     roles: Set<string>;
 }
 
+declare interface UserClaims {
+    sub: string;
+    email: string;
+    roles: string[];
+}
+
 declare interface CreateUserRequest {
     email: string;
     fullName: string;
@@ -45,6 +51,8 @@ export declare class User {
     password: string;
     profilePictureUrl: string;
     roles: Set<string>;
+
+    public getClaims(): UserClaims;
 
     constructor({
         id,
