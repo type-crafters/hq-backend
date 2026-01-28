@@ -6,14 +6,14 @@ import { User } from "../model/User";
 export class UserRepository extends ApplicationRepository {
     constructor(documentClient) {
         super(documentClient);
-        this._requiredEnvVars = ["USER_TABLE"];
+        this.required = ["USER_TABLE"];
     }
 
     async createUser(user) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            await this._documentClient.send(new PutCommand({
-                TableName: this._environment.get("USER_TABLE"),
+            await this.documentClient.send(new PutCommand({
+                TableName: this.getEnv("USER_TABLE").asString(),
                 Item: {...user}
             }));
 
@@ -25,10 +25,10 @@ export class UserRepository extends ApplicationRepository {
     }
 
     async getById(id) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            const result = await this._documentClient.send(new GetCommand({
-                TableName: this._environment.get("USER_TABLE"),
+            const result = await this.documentClient.send(new GetCommand({
+                TableName: this.getEnv("USER_TABLE").asString(),
                 Key: {
                     id
                 }
@@ -46,10 +46,10 @@ export class UserRepository extends ApplicationRepository {
     }
 
     async getByEmail(email) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            const result = await this._documentClient.send(new QueryCommand({
-                TableName: this._environment.get("USER_TABLE"),
+            const result = await this.documentClient.send(new QueryCommand({
+                TableName: this.getEnv("USER_TABLE").asString(),
                 IndexName: "email-index",
                 KeyConditionExpression: "#email = :email",
                 ExpressionAttributeNames: {
@@ -72,10 +72,10 @@ export class UserRepository extends ApplicationRepository {
     }
 
     async deleteById(id) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            const result = await this._documentClient.send(new DeleteCommand({
-                TableName: this._environment.get("USER_TABLE"),
+            const result = await this.documentClient.send(new DeleteCommand({
+                TableName: this.getEnv("USER_TABLE").asString(),
                 Key: {
                     id
                 },
@@ -94,7 +94,7 @@ export class UserRepository extends ApplicationRepository {
     }
 
     async updateUser(user) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
             const item = Object.fromEntries(Object.entries({ ...user }).filter(([_, value]) => value != null));
 
@@ -115,8 +115,8 @@ export class UserRepository extends ApplicationRepository {
                 const UpdateExpression = `SET ${updates.join(", ")}`;
 
                 try {
-                    const result = await this._documentClient.send(new UpdateCommand({
-                        TableName: this._environment.get("USER_TABLE"),
+                    await this.documentClient.send(new UpdateCommand({
+                        TableName: this.getEnv("USER_TABLE").asString(),
                         Key: {
                             id
                         },

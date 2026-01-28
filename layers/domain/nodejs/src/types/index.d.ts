@@ -1,3 +1,4 @@
+export type Async<T extends Function> = (...args: Parameters<T>) => Promise<ReturnType<T>>;
 export declare type Consumer<T> = (value: T) => void;
 export declare type Mapper<T, U> = (value: T) => U;
 export declare type Nullable<T> =  T | null;

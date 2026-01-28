@@ -5,21 +5,21 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/li
 export class RefreshTokenRepository extends ApplicationRepository {
     constructor(documentClient) {
         super(documentClient);
-        this._requiredEnvVars = ["REFRESH_TOKEN_TABLE", "JTI_SECRET"];
+        this.required = ["REFRESH_TOKEN_TABLE", "JTI_SECRET"];
     }
 
     #hashJti(jti) {
-        return createHmac("sha256", this._environment.get("JTI_SECRET"))
+        return createHmac("sha256", this.getEnv("JTI_SECRET").asString())
             .update(jti)
             .digest("base64url");
     }
 
     async createRefreshToken(refreshToken) {
-        this._checkEnvionment();
+        this.checkEnvironment();
 
         try {
-            await this._documentClient.send(new PutCommand({
-                TableName: this._environment.get("REFRESH_TOKEN_TABLE"),
+            await this.documentClient.send(new PutCommand({
+                TableName: this.getEnv("REFRESH_TOKEN_TABLE").asString(),
                 Item: {
                     ...refreshToken,
                     jti: this.#hashJti(refreshToken.jti)
@@ -34,10 +34,10 @@ export class RefreshTokenRepository extends ApplicationRepository {
     }
 
     async existsByJti(jti) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            const result = await this._documentClient.send(new GetCommand({
-                TableName: this._environment.get("REFRESH_TOKEN_TABLE"),
+            const result = await this.documentClient.send(new GetCommand({
+                TableName: this.getEnv("REFRESH_TOKEN_TABLE").asString(),
                 Key: {
                     jti: this.#hashJti(jti)
                 }
@@ -52,8 +52,8 @@ export class RefreshTokenRepository extends ApplicationRepository {
 
     async revokeByJti(jti) {
         try {
-            const result = await this._documentClient.send(new DeleteCommand({
-                TableName: this._environment.get("REFRESH_TOKEN_TABLE"),
+            const result = await this.documentClient.send(new DeleteCommand({
+                TableName: this.getEnv("REFRESH_TOKEN_TABLE").asString(),
                 Key: {
                     jti: this.#hashJti(jti)
                 },
@@ -72,10 +72,10 @@ export class RefreshTokenRepository extends ApplicationRepository {
     }
 
     async revokeAllBySub(sub) {
-        this._checkEnvionment();
+        this.checkEnvironment();
         try {
-            const tokens = await this._documentClient.send(new QueryCommand({
-                TableName: this._environment.get("REFRESH_TOKEN_TABLE"),
+            const tokens = await this.documentClient.send(new QueryCommand({
+                TableName: this.getEnv("REFRESH_TOKEN_TABLE").asString(),
                 IndexName: "sub-index",
                 KeyConditionExpression: "#sub = :sub",
                 ExpressionAttributeNames: {
@@ -95,8 +95,8 @@ export class RefreshTokenRepository extends ApplicationRepository {
             let count = 0;
 
             for (const jti of jtis) {
-                await this._documentClient.send(new DeleteCommand({
-                    TableName: this._environment.get("REFRESH_TOKEN_TABLE"),
+                await this.documentClient.send(new DeleteCommand({
+                    TableName: this.getEnv("REFRESH_TOKEN_TABLE").asString(),
                     Key: {
                         jti
                     }

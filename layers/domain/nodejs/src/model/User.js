@@ -6,7 +6,8 @@ export class User {
     createdAt;
     email;
     firstTimePassword;
-    fullName;
+    firstName;
+    lastName;
     lastUpdatedAt;
     password;
     profilePictureUrl;
@@ -16,8 +17,8 @@ export class User {
         id,
         createdAt,
         email,
-        firstTimePassword,
-        fullName,
+        firstName,
+        lastName,
         lastUpdatedAt,
         password,
         profilePictureUrl,
@@ -26,8 +27,8 @@ export class User {
         this.id = id;
         this.createdAt = createdAt;
         this.email = email;
-        this.firstTimePassword = firstTimePassword;
-        this.fullName = fullName;
+        this.firstName = firstName;
+        this.lastName = lastName;
         this.lastUpdatedAt = lastUpdatedAt;
         this.password = password;
         this.profilePictureUrl = profilePictureUrl;
@@ -45,9 +46,8 @@ export class User {
     static fromCreateRequest(body) {
         const {
             email,
-            fullName,
-            password,
-            roles
+            firstName,
+            lastName
         } = body;
 
         const now = new Date();
@@ -56,12 +56,12 @@ export class User {
             id: randomUUID(),
             createdAt: now,
             email: email.toLowerCase(),
-            firstTimePassword: true,
-            fullName,
+            firstName,
+            lastName,
             lastUpdatedAt: now,
-            password,
+            password: "",
             profilePictureUrl: this.#EMPTY_IMAGE_KEY,
-            roles: new Set(roles)
+            roles: new Set()
         });
     }
 
@@ -70,8 +70,8 @@ export class User {
             id,
             createdAt,
             email,
-            firstTimePassword,
-            fullName,
+            firstName,
+            lastName,
             lastUpdatedAt,
             password,
             profilePictureUrl,
@@ -86,8 +86,8 @@ export class User {
             id,
             createdAt: new Date(createdAt),
             email,
-            firstTimePassword,
-            fullName,
+            firstName,
+            lastName,
             lastUpdatedAt: new Date(lastUpdatedAt),
             password,
             profilePictureUrl,

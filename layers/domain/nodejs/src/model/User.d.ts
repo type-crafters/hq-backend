@@ -5,8 +5,8 @@ declare interface UserArgs {
     id: UUID;
     createdAt: Date;
     email: string;
-    firstTimePassword: boolean;
-    fullName: string;
+    firstName: string;
+    lastName: string;
     lastUpdatedAt: Date;
     password: string;
     profilePictureUrl: string;
@@ -21,9 +21,8 @@ declare interface UserClaims {
 
 declare interface CreateUserRequest {
     email: string;
-    fullName: string;
-    password: string;
-    roles: string[];
+    firstName: string;
+    lastName: string;
     [key: string]: unknown;
 }
 
@@ -31,8 +30,7 @@ declare interface UserItem {
     id: string;
     createdAt: string;
     email: string;
-    firstTimePassword: boolean;
-    fullName: string;
+    firstName: string;
     lastUpdatedAt: string;
     password: string;
     profilePictureUrl: string;
@@ -46,8 +44,8 @@ export declare class User {
     id: UUID;
     createdAt: Date;
     email: string;
-    firstTimePassword: boolean;
-    fullName: string;
+    firstName: string;
+    lastName: string;
     lastUpdatedAt: Date;
     password: string;
     profilePictureUrl: string;
@@ -59,8 +57,8 @@ export declare class User {
         id,
         createdAt,
         email,
-        firstTimePassword,
-        fullName,
+        firstName,
+        lastName,
         lastUpdatedAt,
         password,
         profilePictureUrl,
