@@ -1,1 +1,0 @@
-export { GlobalExceptionHandler } from "./GlobalExceptionHandler.js";
