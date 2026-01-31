@@ -4,7 +4,7 @@ from argparse import ArgumentParser, Namespace
 from functools import wraps
 from inspect import signature
 from json import JSONDecodeError
-from os import makedirs, path, scandir, linesep, remove, walk
+from os import makedirs, path, scandir, remove, walk
 from shutil import rmtree
 from subprocess import CalledProcessError
 from typing import Callable, Literal, Optional, Mapping

@@ -1,5 +1,5 @@
 {
-    "name": "hq-invite-user",
+    "name": "hq-create-user",
     "version": "0.1.0",
     "type": "module",
     "files": [
@@ -18,9 +18,5 @@
         "@types/aws-lambda": "^8.10.160",
         "@types/node": "^25.1.0",
         "typescript": "^5.9.3"
-    },
-    "dependencies": {
-        "@aws-sdk/client-dynamodb": "^3.980.0",
-        "@aws-sdk/lib-dynamodb": "^3.980.0"
     }
 }
