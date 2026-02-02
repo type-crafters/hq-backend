@@ -4,7 +4,7 @@ import { createHash, randomBytes, randomUUID } from "crypto";
 import { readFileSync } from "fs";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { InviteUserRequest } from "./interface/InviteUserRequest.js";
-import { EJS, HttpResponse, HttpCode, Mailer } from "@typecrafters/hq-lib";
+import { EJS, HttpResponse, HttpCode, Mailer, LoggerFactory } from "@typecrafters/hq-lib";
 import { UserInviteItem } from "./interface/UserInviteItem.js";
 import { VerificationStatus } from "./enum/VerificationStatus.js";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -12,17 +12,18 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 const AWS_REGION = "us-east-1";
 
-const API_URL = process.env.API_URL;
+const PAGE_URL = process.env.PAGE_URL;
 const VERIFICATION_TOKEN_TABLE = process.env.VERIFICATION_TOKEN_TABLE;
 const USER_TABLE = process.env.USER_TABLE;
 
-assert(API_URL, "Missing required environment variable 'API_URL'.");
+assert(PAGE_URL, "Missing required environment variable 'PAGE_URL'.");
 assert(VERIFICATION_TOKEN_TABLE, "Missing required environment variable 'VERIFICATION_TOKEN_TABLE'.")
 assert(USER_TABLE, "Missing required environment variable 'USER_TABLE'.")
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: AWS_REGION }))
 
 const handler = async (event: APIGatewayProxyEventV2) => {
+    const logger = LoggerFactory.forFunction(handler);
     try {
         let body: InviteUserRequest;
         try {
@@ -30,6 +31,7 @@ const handler = async (event: APIGatewayProxyEventV2) => {
             body = JSON.parse(event.body);
             assert(body);
         } catch (error) {
+            logger.error(error);
             let message: string = "An error occurred while parsing the request body.";
             if (error instanceof AssertionError) {
                 message = "Missing request body."
@@ -47,8 +49,9 @@ const handler = async (event: APIGatewayProxyEventV2) => {
             assert(typeof firstName === "string" && firstName); 
             assert(typeof lastName === "string" && lastName);
             assert(typeof email === "string" && email);
-            assert(roles instanceof Array && roles.length);
-        } catch {
+            assert(roles instanceof Array);
+        } catch (error) {
+            logger.error(error);
             return new HttpResponse().status(HttpCode.BadRequest)
                 .json({ message: "Missing or incorrect fields." })
                 .parse();
@@ -74,7 +77,7 @@ const handler = async (event: APIGatewayProxyEventV2) => {
         }
 
         const token: string = randomBytes(32).toString("base64url");
-        const url = new URL(API_URL);
+        const url = new URL(PAGE_URL);
         url.pathname = "/users/verify";
         url.searchParams.set("token", token);
 
@@ -121,11 +124,12 @@ const handler = async (event: APIGatewayProxyEventV2) => {
             .json({ message: "User invited." })
             .parse();
 
-    } catch {
+    } catch (error) {
+        logger.error(error);
         return new HttpResponse().status(HttpCode.InternalServerError)
             .json({ message: "Internal server error." })
             .parse();
     }
 };
 
-export default handler;
+export { handler };

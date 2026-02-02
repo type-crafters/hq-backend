@@ -2,6 +2,7 @@ import json
 import subprocess
 from argparse import ArgumentParser, Namespace
 from functools import wraps
+from glob import glob, iglob
 from inspect import signature
 from json import JSONDecodeError
 from os import makedirs, path, scandir, remove, walk
@@ -107,7 +108,7 @@ def AssertNode(fn: Callable):
 def rmzip(at: str, root: Optional[str] = None):
     at = path.abspath(at)
     relpath = path.relpath(at, root) if root else at
-    print(Format.f(f"Removing .zip file at {relpath}...", color='bright_black'))
+    print(Format.f(f"Removing .zip file at '{relpath}'...", color='bright_black'))
     if path.isfile(at):
         if path.splitext(at)[1] == '.zip':
             remove(at)
@@ -119,37 +120,34 @@ def rmzip(at: str, root: Optional[str] = None):
         print(Format.f('❔ Path does not exist.', color='bright_black'))
 
 @AssertNode
-def rm_node_modules(dir: str, root: Optional[str] = None) -> None:
+def restore(
+    dir: str, 
+    root: Optional[str] = None, 
+    omit: Optional[OmitPackages | list[OmitPackages]] = None,
+    clean: bool = False
+    ) -> None:
     dir = path.abspath(dir)
     relpath = path.relpath(dir, root) if root else dir
-    print(Format.f(f"Removing node_modules/ for directory '{relpath}'...", color='bright_black'))
 
-    try:
-        rmtree(path.join(dir, 'node_modules'))
-        print(Format.f(f"✅ node_modules/ at '{relpath}' successfully removed.", color='white')) 
-        return
-    except (FileNotFoundError, NotADirectoryError):
-        print(Format.f(f"❔ node_modules/ at '{relpath}' does not exist.", color='bright_black'))
-    except PermissionError:
-        print(Format.f(f"⚠️  Missing required permissions to remove node_modules/ at '{relpath}'.", color='bright_black'))
-    except OSError:
-        print(Format.f(f"❌ Failed to remove node_modules/ at '{relpath}'.", color='white'))
+    message = f"{'Clean-r' if clean else 'R'}estoring packages for Node.js project at '{relpath}'"
+    cmd = 'npm ci' if clean else 'npm i'
 
-@AssertNode
-def restore(dir: str, root: Optional[str] = None, omit: Optional[OmitPackages | list[OmitPackages]] = None) -> None:
-    dir = path.abspath(dir)
-    relpath = path.relpath(dir, root) if root else dir
-    print(Format.f(f"Restoring packages for Node.js project at '{relpath}'..."))
-    try:
-        cmd = 'npm i'
+    if omit is not None:
+        message += "; Omitting '"
         if isinstance(omit, str) and omit:
+            message += f"{omit}'"
             cmd += f" --omit={omit}"
         elif isinstance(omit, list) and len(omit):
+            message += f"{"', '".join(omit)}'"
             cmd += f" --omit={','.join(omit)}"
-        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True  
-                       
-                       
-                       )
+        message += " packages"
+    message += "..."
+
+    print(Format.f(message, color='bright_black'))
+
+
+    try:
+        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True)
         print(Format.f('✅ Project restored', color='white'))
     except CalledProcessError:
         print(Format.f(f"❌ Failed to restore packages at '{relpath}'.", color='white'))
@@ -162,30 +160,47 @@ def npm_run(script: str, dir: str, root: str) -> None:
     with open(path.join(dir, 'package.json'), 'r', encoding='utf-8') as file:
         package_json = json.load(file)
         if not package_json.get('scripts') or not package_json.get('scripts').get(script):
-            print(Format.f(f"Script '{script}' is not declared in package.json at '{relpath}'."))
+            print(Format.f(f"Script '{script}' is not declared in package.json at '{relpath}'.", color='bright_black'))
+            return
     cmd = f"npm run {script}"
     try: 
         subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True)
-        print(Format.f(f"✅ Command '{cmd}' exited successfully", color='bright_black'))
+        print(
+            Format.f("✅ Command", color='white'),
+            Format.f(f"'{cmd}'", color='blue'),
+            Format.f(f"exited successfully.", color='white')
+        )
     except CalledProcessError:
-        print(Format.f(f"❌ Command '{cmd}' returned a non-zero status code.", color='bright_black'))
+        print(
+            Format.f("❌ Command", color='white'),
+            Format.f(f"'{cmd}'", color='red'),
+            Format.f(f"returned a non-zero status code.", color='white')
+        )
 
-def zipdir(source: str, dest: str, root: str = ''):
+def zipdir(source: str, dest: str, root: str = '', ignore: list[str] = []):
     source = path.abspath(source)
-    relpath = path.relpath(source, root) if root else source
-    try:
-        dest = path.join(dist_dir, dest)
-        makedirs(path.dirname(dest), exist_ok=True)
-        print(Format.f(f"Packaging directory {relpath} into .zip file...", color='bright_black'))
+    dest = path.join(dist_dir, dest)
+    relsrc = path.relpath(source, root) if root else source
+    reldest = path.relpath(dest, path.dirname(dist_dir))
 
+    ignorelist = []
+    if len(ignore):
+        ignorelist = [path.abspath(p) for pattern in ignore for p in glob(path.join(source, pattern), recursive=True)]
+
+    ignorable = bool(len(ignorelist))
+
+    try:
+        makedirs(path.dirname(dest), exist_ok=True)
+        print(Format.f(f"Packaging directory '{relsrc}' into .zip file...", color='bright_black'))
         with ZipFile(dest, 'w', ZIP_DEFLATED) as zipfile:
-            for root, _, files in walk(source):
+            for dirpath, _, files in walk(source):
                 for file in files:
-                    full_path = path.join(root, file)
-                    arcname = path.relpath(full_path, source)
-                    zipfile.write(full_path, arcname)
-        reldest = path.relpath(dest, path.dirname(dist_dir))
-        print(Format.f(f"✅ Directory successfully compressed to .zip file at {reldest}", color='white'))
+                    fullpath = path.join(dirpath, file)
+                    if ignorable and fullpath in ignorelist:
+                        continue
+                    arcname = path.relpath(fullpath, source)
+                    zipfile.write(fullpath, arcname)
+        print(Format.f(f"✅ Directory successfully compressed to .zip file at '{reldest}'", color='white'))
     except Exception:
         print(Format.f('❌ Directory compresion failed', color='white'))
         return
@@ -203,31 +218,47 @@ def resolve_dirs(args: Namespace, root: str):
     
 def restore_lambda(args: Namespace):
     for dir in resolve_dirs(args, root=lambda_dir):
-        rm_node_modules(dir, root=lambda_dir)
-        restore(dir, root=lambda_dir)
+        restore(dir, root=lambda_dir, clean=True)
+        print()
 
 def package_lambda(args: Namespace):
     for dir in resolve_dirs(args, root=lambda_dir):
-        rmzip(path.join(dist_dir, 'lambda', f"{path.basename(dir)}.zip"), path.dirname(dist_dir))
-        rm_node_modules(dir, root=lambda_dir)
-        restore(dir, root=lambda_dir, omit='dev')
+        zipname = f"{path.basename(dir)}.zip"
+        rmzip(at=path.join(dist_dir, 'lambda', zipname), root=__dirname)
+        restore(dir, root=lambda_dir)
         npm_run('build', dir=dir, root=lambda_dir)
-        zipdir(path.join(dir, 'dist'), path.join('lambda', f"{path.basename(dir)}.zip"), dist_dir)
+        restore(dir, root=lambda_dir, omit='dev', clean=True)
+        zipdir(
+            source=dir,
+            dest=path.join('lambda', zipname),
+            root=__dirname,
+            ignore=['src/**/*', 'package-lock.json']
+        )
+        print()
 
 def restore_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
         nodejs = path.join(dir, 'nodejs')
-        rm_node_modules(nodejs, root=layer_dir)
-        restore(nodejs, root=layer_dir)
+        restore(nodejs, root=layer_dir, clean=True)
+        print()
 
 def package_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
         nodejs = path.join(dir, 'nodejs')
-        rmzip(path.join(dist_dir, 'layers', f"{path.basename(dir)}.zip"), path.dirname(dist_dir))
-        rm_node_modules(nodejs, root=layer_dir)
-        restore(nodejs, root=layer_dir, omit='dev')
+        zipname = f"{path.basename(dir)}.zip"
+
+        rmzip(at=path.join(dist_dir, 'layers', zipname), root=__dirname)
+        restore(nodejs, root=layer_dir)
         npm_run('build', dir=nodejs, root=layer_dir)
-        zipdir(path.join(dir, 'dist'), path.join('layers', f"{path.basename(dir)}.zip"), dist_dir)
+        restore(nodejs, root=layer_dir, omit='dev', clean='true')
+        zipdir(
+            source=dir, 
+            dest=path.join('layers', zipname), 
+            root=__dirname,
+            ignore=['nodejs/src/**/*', 'nodejs/package-lock.json']
+        )
+        print()
+
 
 def main():
     # python manage.py
