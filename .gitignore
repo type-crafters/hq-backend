@@ -2,4 +2,4 @@
 **/dist/
 **/.env*
 **/*.zip
-**/nodejs/
+layers/**/nodejs/
