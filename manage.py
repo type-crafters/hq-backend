@@ -204,7 +204,47 @@ def zipdir(source: str, dest: str, root: str = '', ignore: list[str] = []):
     except Exception:
         print(Format.f('❌ Directory compresion failed', color='white'))
         return
+
+@AssertNode
+def pack_layer(dir: str, root: str = ''):
+    dir = path.abspath(dir)
+    relpath = path.relpath(dir, root) if root else dir
+
+    print(Format.f(f"Packing project at {relpath} into a tarball...", color='bright_black'))
+    try: 
+        result = subprocess.run('npm pack --json', cwd=dir, shell=True, check=True, capture_output=True)
+        try: 
+            tarball = json.loads(result.stdout)[0]['filename']
+        except KeyError:
+            print(Format.f('❌ Could not read filename for tarball.'))
+            return
+        print(Format.f('✅ Tarball creation succeeded.', color='white'))
+    except CalledProcessError:
+        print(Format.f('❌ Failed to create tarball.', color='white'))
+        return
     
+    print(Format.f('Creating layer structure...', color='bright_black'))
+    cmd = ['npm', 'install', tarball, '--prefix', 'nodejs']
+    try:
+        subprocess.run(
+            ' '.join(cmd), 
+            cwd=dir, 
+            shell=True, 
+            check=True, 
+            capture_output=True,
+        )
+        
+        print(Format.f(f"✅ Layer folder created at {path.join(relpath, 'nodejs')}.", color='white'))
+    except CalledProcessError:
+        print(Format.f('❌ Failed to create layer structure.', color='white'))
+
+    print(Format.f('All in order. Removing tarball...', color='bright_black'))
+    try:
+        remove(path.join(dir, tarball))
+        print(Format.f('✅ Tarball removed.', color='white'))
+    except OSError:
+        print(Format.f(f"❌ Failed to remove {tarball}", color='white'))
+
 def resolve_dirs(args: Namespace, root: str):
     projects: list[str] = args.projects
     all: bool = args.all
@@ -238,24 +278,22 @@ def package_lambda(args: Namespace):
 
 def restore_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
-        nodejs = path.join(dir, 'nodejs')
-        restore(nodejs, root=layer_dir, clean=True)
+        restore(dir, root=layer_dir, clean=True)
         print()
 
 def package_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
-        nodejs = path.join(dir, 'nodejs')
         zipname = f"{path.basename(dir)}.zip"
 
         rmzip(at=path.join(dist_dir, 'layers', zipname), root=__dirname)
-        restore(nodejs, root=layer_dir)
-        npm_run('build', dir=nodejs, root=layer_dir)
-        restore(nodejs, root=layer_dir, omit='dev', clean='true')
+        restore(dir=dir, root=layer_dir)
+        npm_run('build', dir=dir, root=layer_dir)
+        pack_layer(dir=dir, root=layer_dir)
         zipdir(
-            source=dir, 
+            source=path.join(dir, 'nodejs'), 
             dest=path.join('layers', zipname), 
             root=__dirname,
-            ignore=['nodejs/src/**/*', 'nodejs/package-lock.json']
+            ignore=['src/**/*', 'package-lock.json']
         )
         print()
 
