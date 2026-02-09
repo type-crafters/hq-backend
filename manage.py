@@ -1,12 +1,12 @@
 import json
 import subprocess
 from argparse import ArgumentParser, Namespace
+from datetime import datetime
 from functools import wraps
-from glob import glob, iglob
+from glob import glob
 from inspect import signature
 from json import JSONDecodeError
 from os import makedirs, path, scandir, remove, walk
-from shutil import rmtree
 from subprocess import CalledProcessError
 from typing import Callable, Literal, Optional, Mapping
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -76,6 +76,16 @@ class Format:
             suf = cls.reset
         suf += end
         return pre + sep.join([str(v) for v in values]) + suf
+
+def Abortable(fn: Callable): 
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyboardInterrupt:
+            print(Format.f("User aborted operation (Ctrl + C)", color='red'))
+            exit(1)
+    return wrapper
 
 def AssertNode(fn: Callable):
     sig = signature(fn)
@@ -156,25 +166,42 @@ def restore(
 def npm_run(script: str, dir: str, root: str) -> None:
     dir = path.abspath(dir)
     relpath = path.relpath(dir, root) if root else dir
+    pkg_script = ''
     print(Format.f(f"Running script '{script}' for Node.js project at '{relpath}'...", color='bright_black'))
     with open(path.join(dir, 'package.json'), 'r', encoding='utf-8') as file:
         package_json = json.load(file)
-        if not package_json.get('scripts') or not package_json.get('scripts').get(script):
+        if not package_json.get('scripts') or not (pkg_script := package_json.get('scripts').get(script)):
             print(Format.f(f"Script '{script}' is not declared in package.json at '{relpath}'.", color='bright_black'))
             return
     cmd = f"npm run {script}"
     try: 
-        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True)
+        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True, text=True)
         print(
             Format.f("✅ Command", color='white'),
             Format.f(f"'{cmd}'", color='blue'),
             Format.f(f"exited successfully.", color='white')
         )
-    except CalledProcessError:
+    except CalledProcessError as e:
+        log = [
+            f"[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]",
+            f"({path.basename(dir)})",
+            f"script '{script}': {pkg_script}",
+            'stdout:',
+            e.stdout,
+            'stderr:',
+            e.stderr,
+            ''
+        ]
+
+        with open(path.join(dir, 'build-process.log'), 'a+', encoding='utf-8') as file:
+            file.write('\n'.join(log))
+
         print(
             Format.f("❌ Command", color='white'),
             Format.f(f"'{cmd}'", color='red'),
-            Format.f(f"returned a non-zero status code.", color='white')
+            Format.f(f"returned a non-zero status code. Check", color='white'),
+            Format.f(path.join(dir, 'build-process.log'), color='cyan'),
+            Format.f("for more information.", color='white')
         )
 
 def zipdir(source: str, dest: str, root: str = '', ignore: list[str] = []):
@@ -255,12 +282,15 @@ def resolve_dirs(args: Namespace, root: str):
         if all else 
         [path.join(root, item) for item in projects if path.isdir(path.join(root, item))]
     )
-    
+
+
+@Abortable
 def restore_lambda(args: Namespace):
     for dir in resolve_dirs(args, root=lambda_dir):
         restore(dir, root=lambda_dir, clean=True)
         print()
 
+@Abortable
 def package_lambda(args: Namespace):
     for dir in resolve_dirs(args, root=lambda_dir):
         zipname = f"{path.basename(dir)}.zip"
@@ -272,15 +302,17 @@ def package_lambda(args: Namespace):
             source=dir,
             dest=path.join('lambda', zipname),
             root=__dirname,
-            ignore=['src/**/*', 'package-lock.json']
+            ignore=['src/**/*', 'package-lock.json', '*.log']
         )
         print()
 
+@Abortable
 def restore_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
         restore(dir, root=layer_dir, clean=True)
         print()
 
+@Abortable
 def package_layer(args: Namespace):
     for dir in resolve_dirs(args, root=layer_dir):
         zipname = f"{path.basename(dir)}.zip"

@@ -136,7 +136,7 @@ export class Cookie {
         assert((!sameSite || ["Strict", "Lax", "None"].includes(sameSite)), 
             "A cookie's SameSite attribute must be either 'Strict', 'Lax', or 'None'."
         );
-        assert((!secure || sameSite !== "None"), 
+        assert(sameSite !== "None" || secure, 
             "Cookies with a SameSite attribute set to 'None' must be secure."
         );
 

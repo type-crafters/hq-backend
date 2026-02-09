@@ -22,7 +22,7 @@ export class Mailer extends RequiresEnvironment {
             service: this.getEnv("SMTP_SERVICE").toString(),
             auth: {
                 user: this.getEnv("SMTP_USER").toString(),
-                pass: this.getEnv("SMTP_PASSWORD").toString()
+                pass: this.getEnv("SMTP_PASS").toString()
             }
         });
     }

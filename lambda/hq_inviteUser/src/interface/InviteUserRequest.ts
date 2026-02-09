@@ -2,6 +2,6 @@ export interface InviteUserRequest {
     firstName: string;
     lastName: string;
     email: string;
-    roles: string[];
+    permissions: string[];
     [key: string]: unknown;
 }

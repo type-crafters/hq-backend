@@ -7,17 +7,17 @@
     ],
     "main": "dist/index.js",
     "scripts": {
-        "build": "tsc"
+        "build": "tsc && node -e \"require('fs').cpSync('src/template', 'dist/template', { recursive: true })\""
     },
     "engines": {
         "node": ">=18"
     },
     "private": true,
     "devDependencies": {
-        "@typecrafters/hq-lib": "file:../../layers/lib/nodejs",
         "@types/aws-lambda": "^8.10.160",
         "@types/node": "^25.1.0",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "@typecrafters/hq-lib": "file:../../layers/lib"
     },
     "dependencies": {
         "@aws-sdk/client-dynamodb": "^3.980.0",

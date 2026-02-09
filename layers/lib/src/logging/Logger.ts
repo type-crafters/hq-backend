@@ -6,6 +6,7 @@ export class LoggerFactory {
 
 class Logger<T extends Function> {
     private static readonly TRACE = "TRACE";
+    private static readonly LOG = "LOG";
     private static readonly DEBUG = "DEBUG";
     private static readonly INFO = "INFO";
     private static readonly WARNING = "WARNING";
@@ -39,7 +40,8 @@ class Logger<T extends Function> {
     }
 
     private get formattedDate() {
-        return Logger.DATE_FORMATTER.format(new Date());
+        const now = new Date();
+        return Logger.DATE_FORMATTER.format(now) + "." + now.getMilliseconds().toString().padStart(3, "0");
     }
 
     private formatValue(value: unknown) {
