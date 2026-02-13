@@ -1,10 +1,10 @@
 import { UUID } from "crypto";
-import { VerificationStatus } from "../enum/VerificationStatus.js";
+import { UserStatus } from "../enum/UserStatus.js";
 
 export interface UserInviteItem {
     id: UUID;
     firstName: string;
     lastName: string;
     email: string;
-    status: VerificationStatus;
+    status: UserStatus;
 }

@@ -41,7 +41,7 @@ class Logger<T extends Function> {
 
     private get formattedDate() {
         const now = new Date();
-        return Logger.DATE_FORMATTER.format(now) + "." + now.getMilliseconds().toString().padStart(3, "0");
+        return `${Logger.DATE_FORMATTER.format(now)}.${now.getMilliseconds().toString().padStart(3, "0")}`;
     }
 
     private formatValue(value: unknown) {

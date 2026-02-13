@@ -1,0 +1,22 @@
+{
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ],
+    "compilerOptions": {
+        "strict": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "rootDir": "src",
+        "declaration": true,
+        "declarationMap": false,
+        "outDir": "dist",
+        "removeComments": true,
+        "sourceMap": false,
+        "esModuleInterop": true,
+        "target": "esnext"
+    }
+}

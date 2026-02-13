@@ -1,5 +1,4 @@
 import { createTransport, type Transporter } from "nodemailer";
-import type { SentMessageInfo, Options } from "nodemailer/lib/smtp-transport/index.js";
 import { RequiresEnvironment } from "../util/RequiresEnvironment.js";
 
 export class Mailer extends RequiresEnvironment {
@@ -10,7 +9,7 @@ export class Mailer extends RequiresEnvironment {
         "SMTP_FROM"
     ]);
 
-    private transporter: Transporter<SentMessageInfo, Options>;
+    private transporter: Transporter;
 
     private get from() {
         return `${this.getEnv("SMTP_FROM").toString()} <${this.getEnv("SMTP_USER").toString()}>`;
@@ -19,15 +18,15 @@ export class Mailer extends RequiresEnvironment {
     constructor(environment: NodeJS.ProcessEnv) {
         super(environment);
         this.transporter = createTransport({
-            service: this.getEnv("SMTP_SERVICE").toString(),
+            service: this.getEnv("SMTP_SERVICE").strict().toString(),
             auth: {
-                user: this.getEnv("SMTP_USER").toString(),
-                pass: this.getEnv("SMTP_PASS").toString()
+                user: this.getEnv("SMTP_USER").strict().toString(),
+                pass: this.getEnv("SMTP_PASS").strict().toString()
             }
         });
     }
 
-    public async sendHTMLEmail(to: string, html: string, subject: string) {
+    public async sendHTMLEmail(to: string, html: string, subject: string): Promise<any> {
         return await this.transporter.sendMail({
             subject,
             html,
@@ -36,7 +35,7 @@ export class Mailer extends RequiresEnvironment {
         });
     }
 
-    public async sendTextEmail(to: string, content: string, subject: string) {
+    public async sendTextEmail(to: string, content: string, subject: string): Promise<any> {
         return await this.transporter.sendMail({
             subject,
             text: content,

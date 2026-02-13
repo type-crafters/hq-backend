@@ -18,6 +18,6 @@ export class EJS<Asynchronous extends boolean = false> {
     }
 
     public using(data: Record<string, any>): Asynchronous extends true ? Promise<string> : string {
-        return ejs.render(this.template, data, { async: this.asynchronous }) as any;
+        return ejs.render(this.template, data, { async: this.asynchronous }) as Asynchronous extends true ? Promise<string> : string;
     }
 }

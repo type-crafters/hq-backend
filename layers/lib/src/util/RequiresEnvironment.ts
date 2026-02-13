@@ -1,5 +1,5 @@
 import assert from "assert";
-import { StringValueParser } from "./StringValueParser.js";
+import { StringParser } from "./StringParser.js";
 
 export abstract class RequiresEnvironment {
     protected required: Set<string> = new Set();
@@ -13,7 +13,7 @@ export abstract class RequiresEnvironment {
         ));
     }
 
-    public getEnv(name: string): StringValueParser {
-        return new StringValueParser(name, this.environment.get(name));
+    public getEnv(name: string): StringParser {
+        return StringParser.of(this.environment.get(name));
     }
 }

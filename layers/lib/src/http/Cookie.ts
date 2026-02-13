@@ -1,5 +1,5 @@
 import assert from "assert";
-import { StringValueParser } from "../util/StringValueParser.js";
+import { StringParser } from "../util/StringParser.js";
 import { Optional } from "../types/index.js";
 
 interface CookieArgs {
@@ -21,18 +21,14 @@ class CookieGetter {
         this.name = name;
     }
 
-    public from(cookie: string): StringValueParser {
+    public from(cookie: string): StringParser {
         assert(this.name, "Called CookieGetter::from without providing a cookie name.");
 
         const cookies = cookie.split(";").map(c => c.trim()).filter(c => !!c);
         const thisCookie = cookies.find(c => c.slice(0, c.indexOf("=")).trim() === this.name);
 
         assert(thisCookie, "Cookie with name '" + this.name + "' not found.");
-
-        return new StringValueParser(
-            this.name,
-            decodeURIComponent(thisCookie.slice(thisCookie.indexOf("=")))
-        );
+        return StringParser.of(decodeURIComponent(thisCookie.slice(thisCookie.indexOf("="))));
     }
 }
 

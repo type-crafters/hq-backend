@@ -6,7 +6,7 @@ import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { InviteUserRequest } from "./interface/InviteUserRequest.js";
 import { EJS, HttpResponse, HttpCode, Mailer, LoggerFactory } from "@typecrafters/hq-lib";
 import { UserInviteItem } from "./interface/UserInviteItem.js";
-import { VerificationStatus } from "./enum/VerificationStatus.js";
+import { UserStatus } from "./enum/UserStatus.js";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
@@ -126,7 +126,7 @@ const handler = async (event: APIGatewayProxyEventV2) => {
             firstName,
             lastName,
             email,
-            status: VerificationStatus.Unverified
+            status: UserStatus.Unverified
         } satisfies UserInviteItem;
 
         await ddb.send(new PutCommand({
