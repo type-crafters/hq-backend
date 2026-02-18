@@ -1,12 +1,15 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
-import { HttpCode, HttpResponse, LoggerFactory } from "@typecrafters/hq-lib";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { LoggerFactory, HttpResponse, HttpCode, type ResponseObject } from "@typecrafters/hq-lib";
 import assert from "assert";
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import type { User } from "./interface/User.js";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { UserResponse } from "./interface/UserResponse.js";
 
 const AWS_REGION = "us-east-1";
+
 const BUCKET = process.env.BUCKET;
 const USER_TABLE = process.env.USER_TABLE;
 
@@ -16,53 +19,64 @@ assert(USER_TABLE, "Missing required environment variable 'USER_TABLE'");
 const s3 = new S3Client({ region: AWS_REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: AWS_REGION }));
 
-const handler = async (event: APIGatewayProxyEventV2) => {
+const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> => {
     const logger = LoggerFactory.forFunction(handler);
     try {
-        const params = event.pathParameters;
+        const { pathParameters: params } = event;
 
-        if (!params || !params["id"]) {
-            return new HttpResponse().status(HttpCode.BadRequest)
-                .json({ message: "No 'id' parameter provided." })
-                .parse();
+        if (!params || !Object.keys(params).length) {
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing or empty required path parameters.")
+                .build()
         }
 
-        const id: string = params["id"];
+        const { id } = params;
 
-        try {
-            const result = await ddb.send(new GetCommand({
-                TableName: USER_TABLE,
-                Key: { id }
-            }));
-
-            const user = result.Item;
-
-            if (!user || !Object.keys(user).length) {
-                return new HttpResponse().status(HttpCode.NotFound)
-                    .json({ message: "User not found" })
-                    .parse();
-            }
-
-            if (user.profilePictureUrl) {
-                user.profilePictureUrl = await getSignedUrl(s3, new GetObjectCommand({
-                    Bucket: BUCKET,
-                    Key: user.profilePictureUrl
-                }), { expiresIn: 3600 });
-            }
-
-            return new HttpResponse().status(HttpCode.OK)
-                .json({ message: "User retrieved", user })
-                .parse();
-
-        } catch (error) {
-            logger.error("There was an error retrieving the user from the database.");
-            throw error;
+        if (!id) {
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing or empty required path parameters.")
+                .build();
         }
+
+        const result = await ddb.send(new GetCommand({
+            TableName: USER_TABLE,
+            Key: { id }
+        }));
+
+        if (!result || !result.Item || !Object.keys(result.Item).length) {
+            return HttpResponse.builder()
+                .status(HttpCode.NotFound)
+                .text("User not found.")
+                .build();
+        }
+
+        const user = result.Item as User;
+
+        const response: UserResponse = {
+            ...user,
+            password: !!user.password,
+            permissions: Array.from(user.permissions ?? [])
+        };
+
+        if (response.profilePictureUrl) {
+            response.profilePictureUrl = await getSignedUrl(s3, new GetObjectCommand({
+                Bucket: BUCKET,
+                Key: response.profilePictureUrl
+            }), { expiresIn: 3600 });
+        }
+
+        return HttpResponse.builder()
+            .status(HttpCode.OK)
+            .json(response)
+            .build();
     } catch (error) {
         logger.error(error);
-        return new HttpResponse().status(HttpCode.InternalServerError)
-            .json({ message: "Internal server error." })
-            .parse();
+        return HttpResponse.builder()
+            .status(HttpCode.InternalServerError)
+            .text("Internal server error.")
+            .build();
     }
 };
 

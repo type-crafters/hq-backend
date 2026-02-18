@@ -1,10 +1,10 @@
+import type { UUID } from "crypto";
+
 export interface AccessTokenClaims {
-    iat: number;
+    jti: UUID;
+    iat: number
     exp: number;
-    iss: string;
-    jti: string;
-    sub: string;
+    sub: UUID;
     eml: string;
-    rol: string[];
-    typ: "access";
+    prm: string[]
 }

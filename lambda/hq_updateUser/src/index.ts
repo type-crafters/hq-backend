@@ -19,18 +19,20 @@ const handler = async (event: APIGatewayProxyEventV2) => {
 
         if (!body || !pathParameters) {
             logger.error("Request body or path parameters not provided.");
-            return new HttpResponse().status(HttpCode.BadRequest)
-                .json({ message: "Missing required request data." })
-                .parse();
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing request body or path parameters.")
+                .build();
         }
 
         const id = pathParameters.id;
 
         if (!id) {
             logger.error("Missing id in event.pathParameters");
-            return new HttpResponse().status(HttpCode.BadGateway)
-                .json({ message: "Missing required path parameters." })
-                .parse();
+            return HttpResponse.builder()
+                .status(HttpCode.BadGateway)
+                .json("Missing required path parameters.")
+                .build();
         }
 
         const {
@@ -74,22 +76,25 @@ const handler = async (event: APIGatewayProxyEventV2) => {
                     ReturnValues: "ALL_NEW",
                     ConditionExpression: "attribute_exists(id)"
                 }));
-                return new HttpResponse().status(HttpCode.OK)
-                    .json(result.Attributes)
-                    .parse();
+                return HttpResponse.builder()
+                    .status(HttpCode.OK)
+                    .json(result.Attributes!)
+                    .build();
             } catch (error) {
                 if (error instanceof ConditionalCheckFailedException) {
-                    return new HttpResponse().status(HttpCode.NotFound)
-                        .json({ message: "User not found." })
-                        .parse();
+                    return HttpResponse.builder()
+                        .status(HttpCode.NotFound)
+                        .text("User not found.")
+                        .build();
                 }
             }
         }
     } catch (error) {
         logger.error(error);
-        return new HttpResponse().status(HttpCode.InternalServerError)
-            .json({ message: "Internal server error." })
-            .parse();
+        return HttpResponse.builder()
+            .status(HttpCode.InternalServerError)
+            .text("Internal server error.")
+            .build();
     }
 };
 

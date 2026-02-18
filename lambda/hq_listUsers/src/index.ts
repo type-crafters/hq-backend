@@ -52,7 +52,7 @@ const handler = async (event: APIGatewayProxyEventV2) => {
                         ...i,
                         password: !!i.password,
                         profilePictureUrl: url,
-                        permissions: Array.from(i.permissions)
+                        permissions: Array.from(i.permissions) as string[]
                     };
                 }));
 
@@ -62,25 +62,27 @@ const handler = async (event: APIGatewayProxyEventV2) => {
                     newCursor = Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString("base64");
                 }
 
-                return new HttpResponse().status(HttpCode.OK)
+                return HttpResponse.builder()
+                    .status(HttpCode.OK)
                     .json({ cursor: newCursor, items })
-                    .parse();
+                    .build();
             } else {
-                return new HttpResponse().status(HttpCode.NotFound)
-                    .json({ message: "Not Found" })
-                    .parse();
+                return HttpResponse.builder()
+                    .status(HttpCode.NotFound)
+                    .text("Not Found")
+                    .build();
             }
         } catch (error) {
             logger.error("An error occurred while querying DynamoDB");
             throw error;
         }
-        
 
     } catch (error) {
         logger.error(error);
-        return new HttpResponse().status(HttpCode.InternalServerError)
-            .json({ message: "Internal server error." })
-            .parse();
+        return HttpResponse.builder()
+            .status(HttpCode.InternalServerError)
+            .text("Internal server error.")
+            .build();
     }
 };
 

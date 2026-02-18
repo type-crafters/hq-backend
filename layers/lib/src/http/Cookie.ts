@@ -28,7 +28,7 @@ class CookieGetter {
         const thisCookie = cookies.find(c => c.slice(0, c.indexOf("=")).trim() === this.name);
 
         assert(thisCookie, "Cookie with name '" + this.name + "' not found.");
-        return StringParser.of(decodeURIComponent(thisCookie.slice(thisCookie.indexOf("="))));
+        return StringParser.of(decodeURIComponent(thisCookie.slice(thisCookie.indexOf("=") + 1)));
     }
 }
 
@@ -127,14 +127,17 @@ export class Cookie {
         expires,
         maxAge
     }: CookieArgs) {
-        assert(name, "Cookies must, at least, define a name and a value.");
-        assert(value, "Cookies must, at least, define a name and a value.")
-        assert((!sameSite || ["Strict", "Lax", "None"].includes(sameSite)), 
-            "A cookie's SameSite attribute must be either 'Strict', 'Lax', or 'None'."
-        );
-        assert(sameSite !== "None" || secure, 
-            "Cookies with a SameSite attribute set to 'None' must be secure."
-        );
+        if (name == null || value == null) {
+            throw new TypeError("Cookies must, at least, define a name and a value.");
+        }
+
+        if (sameSite != null && !["Strict", "Lax", "None"].includes(sameSite)) {
+            throw new TypeError("A cookie's SameSite attribute must be either 'Strict', 'Lax', or 'None'.");
+        }
+
+        if (sameSite === "None" && !secure) {
+            throw new TypeError("Cookies with a SameSite attribute set to 'None' must be secure.");
+        }
 
         this.name = name;
         this.value = value;
@@ -145,6 +148,48 @@ export class Cookie {
         this.sameSite = sameSite;
         this.expires = expires;
         this.maxAge = maxAge;
+    }
+
+    public static from(cookiestr: string): Cookie {
+        const args: Record<string, any> = {};
+        const [kvp, ...attributes] = cookiestr.split(";").map(w => w.trim());
+        const [namestr, ...valuestr] = kvp.split("=");
+        const attrMap = new Map(attributes.map(attr => {
+            const [name, ...valuelist] = attr.toLowerCase().split("=");
+            const value = valuelist.join("=");
+            return [name.trim(), value.trim()];
+        }));
+
+        if (attrMap.has("httponly")) {
+            args.httpOnly = true;
+        }
+
+        if (attrMap.has("secure")) {
+            args.secure = true;
+        }
+
+        if (attrMap.has("domain")) {
+            args.domain = attrMap.get("domain");
+        }
+
+        if (attrMap.has("path")) {
+            args.path = attrMap.get("path");
+        }
+
+        if (attrMap.has("samesite") && ["strict", "lax", "none"].includes(attrMap.get("samesite")!)) {
+            const ss = attrMap.get("samesite")!;
+            args.sameSite =  ss.charAt(0).toUpperCase() + ss.slice(1).toLowerCase();
+        }
+
+        if (attrMap.has("max-age")) {
+            args.maxAge = StringParser.of(attrMap.get("max-age")).strict().toInt();
+        }
+
+        if (attrMap.has("expires")) {
+            args.expires = new Date(attrMap.get("expires")!);
+        }
+
+        return new Cookie({ ...args, name: namestr.trim(), value: valuestr.join("=").trim() });
     }
 
     static builder() {

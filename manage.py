@@ -163,7 +163,7 @@ def restore(
         print(Format.f(f"❌ Failed to restore packages at '{relpath}'.", color='white'))
 
 @AssertNode
-def npm_run(script: str, dir: str, root: str) -> None:
+def npm_run(script: str, dir: str, root: str, stdout: bool = False) -> None:
     dir = path.abspath(dir)
     relpath = path.relpath(dir, root) if root else dir
     pkg_script = ''
@@ -175,7 +175,7 @@ def npm_run(script: str, dir: str, root: str) -> None:
             return
     cmd = f"npm run {script}"
     try: 
-        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, cwd=dir, shell=True, check=True, capture_output=not stdout, text=True)
         print(
             Format.f("✅ Command", color='white'),
             Format.f(f"'{cmd}'", color='blue'),
@@ -296,13 +296,14 @@ def package_lambda(args: Namespace):
         zipname = f"{path.basename(dir)}.zip"
         rmzip(at=path.join(dist_dir, 'lambda', zipname), root=__dirname)
         restore(dir, root=lambda_dir)
+        npm_run('test', dir=dir, root=lambda_dir, stdout=True)
         npm_run('build', dir=dir, root=lambda_dir)
         restore(dir, root=lambda_dir, omit='dev', clean=True)
         zipdir(
             source=dir,
             dest=path.join('lambda', zipname),
             root=__dirname,
-            ignore=['src/**/*', 'package-lock.json', '*.log']
+            ignore=['src/**/*', 'package-lock.json', '*.log', '**/test/**/*']
         )
         print()
 
@@ -325,7 +326,7 @@ def package_layer(args: Namespace):
             source=path.join(dir, 'nodejs'), 
             dest=path.join('layers', zipname), 
             root=__dirname,
-            ignore=['src/**/*', 'package-lock.json']
+            ignore=['src/**/*', 'package-lock.json', '.log', '**/test/**/*']
         )
         print()
 

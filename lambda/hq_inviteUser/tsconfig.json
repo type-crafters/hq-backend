@@ -4,7 +4,8 @@
     ],
     "exclude": [
         "node_modules",
-        "dist"
+        "dist",
+        "test"
     ],
     "compilerOptions": {
         "strict": true,
@@ -16,6 +17,7 @@
         "declarationMap": false,
         "removeComments": true,
         "sourceMap": false,
+        "verbatimModuleSyntax": true,
         "esModuleInterop": true,
         "target": "esnext"
     }

@@ -1,11 +1,4 @@
 {
-    "include": [
-        "src/**/*.ts"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist"
-    ],
     "compilerOptions": {
         "strict": true,
         "module": "nodenext",
@@ -13,10 +6,14 @@
         "rootDir": "src",
         "declaration": true,
         "declarationMap": false,
+        "types": ["node", "aws-lambda"],
         "outDir": "dist",
         "removeComments": true,
+        "verbatimModuleSyntax": true,
         "sourceMap": false,
         "esModuleInterop": true,
-        "target": "esnext"
-    }
+        "target": "esnext",
+        "skipLibCheck": true
+    },
+    "exclude": ["node_modules", "dist", "test"]
 }

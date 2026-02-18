@@ -20,30 +20,32 @@ const handler = async (event: APIGatewayProxyEventV2) => {
         const { body, pathParameters } = event;
         if (!body || !pathParameters) {
             logger.error("Request body or path parameters not provided.");
-            return new HttpResponse().status(HttpCode.BadRequest)
-                .json({ message: "Missing required request data." })
-                .parse();
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing request body or path parameters")
+                .build();
         }
 
         const id = pathParameters.id;
 
         if (!id) {
             logger.error("Missing id in event.pathParameters");
-            return new HttpResponse().status(HttpCode.BadRequest)
-                .json({ message: "Missing required path parameters." })
-                .parse();
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing required path parameters.")
+                .build();
         }
 
         const { upload, contentType }: SignedUploadRequest = JSON.parse(body);
 
         if (typeof upload !== "string" || !upload || typeof contentType !== "string" || !contentType) {
             logger.error("Body contains empty or malformed fields.")
-            return new HttpResponse().status(HttpCode.BadRequest)
-                .json({ message: "Body contains empty or malformed fields." })
-                .parse();
+            return HttpResponse.builder()
+                .status(HttpCode.BadRequest)
+                .text("Missing or malformed required fields.")
+                .build();
         }
-
-
+        
         if (Object.values(UploadType).includes(upload)) {
             let key: string = "";
             switch (upload) {
@@ -52,9 +54,10 @@ const handler = async (event: APIGatewayProxyEventV2) => {
                     break;
                 default:
                     logger.error("The declared type of the upload is not supported.")
-                    return new HttpResponse().status(HttpCode.BadRequest)
+                    return HttpResponse.builder()
+                        .status(HttpCode.BadRequest)
                         .json({ message: "Cannot upload file of this type." })
-                        .parse();
+                        .build();
             }
 
             if (key) {
@@ -64,16 +67,18 @@ const handler = async (event: APIGatewayProxyEventV2) => {
                     ContentType: contentType
                 }), { expiresIn: 60 });
 
-                return new HttpResponse().status(HttpCode.OK)
+                return HttpResponse.builder()
+                    .status(HttpCode.OK)
                     .json({ url, key })
-                    .parse();
+                    .build();
             } 
         }
     } catch (error) {
         logger.error(error);
-        return new HttpResponse().status(HttpCode.InternalServerError)
+        return HttpResponse.builder()
+            .status(HttpCode.InternalServerError)
             .json({ message: "Internal server error." })
-            .parse();
+            .build();
     }
 };
 

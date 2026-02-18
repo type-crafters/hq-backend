@@ -1,8 +1,8 @@
+import type { UUID } from "crypto";
+
 export interface RefreshTokenClaims {
-    iat: number;
+    jti: UUID;
+    iat: number
     exp: number;
-    iss: string;
-    jti: string;
-    sub: string;
-    typ: "refresh";
+    sub: UUID;
 }
