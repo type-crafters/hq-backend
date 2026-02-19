@@ -13,6 +13,7 @@
         "moduleResolution": "nodenext",
         "outDir": "dist",
         "rootDir": "src",
+        "types": ["node", "aws-lambda"],
         "declaration": true,
         "declarationMap": false,
         "removeComments": true,

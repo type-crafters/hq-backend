@@ -7,17 +7,19 @@
     ],
     "main": "dist/index.js",
     "scripts": {
-        "build": "tsc && node -e \"require('fs').cpSync('src/template', 'dist/template', { recursive: true })\""
+        "build": "tsc && node -e \"require('fs').cpSync('src/template', 'dist/template', { recursive: true })\"",
+        "test": "node --import tsx --experimental-test-module-mocks --test test/**/*.spec.ts"
     },
     "engines": {
         "node": ">=18"
     },
     "private": true,
     "devDependencies": {
+        "@typecrafters/hq-lib": "file:../../layers/lib",
         "@types/aws-lambda": "^8.10.160",
         "@types/node": "^25.1.0",
-        "typescript": "^5.9.3",
-        "@typecrafters/hq-lib": "file:../../layers/lib"
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
     },
     "dependencies": {
         "@aws-sdk/client-dynamodb": "^3.980.0",
