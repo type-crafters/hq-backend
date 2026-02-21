@@ -11,7 +11,9 @@ const AWS_REGION = "us-east-1";
 const BUCKET = process.env.BUCKET;
 const USER_TABLE = process.env.USER_TABLE;
 const REFRESH_TOKEN_TABLE = process.env.REFRESH_TOKEN_TABLE;
+const ACCESS_SECRET = process.env.ACCESS_SECRET;
 
+assert(ACCESS_SECRET, "Missing required environment variable 'ACCESS_SECRET'.");
 assert(BUCKET, "Missing required environment variable 'BUCKET'.");
 assert(REFRESH_TOKEN_TABLE, "Missing required environment variable 'REFRESH_TOKEN_TABLE'.");
 assert(USER_TABLE, "Missing required environment variable 'USER_TABLE'.");

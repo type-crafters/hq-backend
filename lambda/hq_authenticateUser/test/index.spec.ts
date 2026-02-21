@@ -54,6 +54,8 @@ describe("hq_authenticateUser tests", async () => {
 
         ctx.mock.method(bcrypt, "compare", async (...args: any[]) => true);
 
+        ctx.mock.method(S3Client.prototype)
+
         event = {
             version: "2.0",
             routeKey: "POST /auth/login",

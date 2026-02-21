@@ -29,7 +29,9 @@ const SMTP_SERVICE = process.env.SMTP_SERVICE;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const SMTP_FROM = process.env.SMTP_FROM;
+const ACCESS_SECRET = process.env.ACCESS_SECRET;
 
+assert(ACCESS_SECRET, "Missing required environment variable 'ACCESS_SECRET'.");
 assert(PAGE_URL, "Missing required environment variable 'PAGE_URL'.");
 assert(VERIFICATION_TOKEN_TABLE, "Missing required environment variable 'VERIFICATION_TOKEN_TABLE'.")
 assert(USER_TABLE, "Missing required environment variable 'USER_TABLE'.")

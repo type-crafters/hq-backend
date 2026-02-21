@@ -304,3 +304,4 @@ describe("hq_inviteUser tests", () => {
         assert.equal(response.headers["Content-Type"], "text/plain");
     });
 });
+  
