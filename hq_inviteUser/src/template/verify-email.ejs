@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Email Verification</title>
+</head>
+
+<body style="
+      margin: 0;
+      padding: 0;
+      background-color: #F1F5F9;
+      font-family: Arial, Helvetica, sans-serif;
+      color: black;
+">
+    <!-- BEGIN CONTAINER -->
+    <table
+        width="100%"
+        cellpadding="0" 
+        cellspacing="0" 
+        border="0"
+        style="background-color: #F1F5F9; padding: 1.5rem 0;"
+    >
+        <tr>
+            <td align="center">
+                <!-- BEGIN CONTENT -->
+                <table width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="background-color: white; border-radius: 0.5rem; overflow: hidden;">
+                    <!-- BEGIN HEADER -->
+                    <tr>
+                        <td style="
+                            background-color: white;
+                            padding: 1rem;
+                            text-align: center;
+                            font-size: 1.25rem;
+                            font-weight: bold;
+                        ">
+                            Verify your email address
+                        </td>
+                    </tr>
+                    <!-- END HEADER -->
+                    <!-- BEGIN BODY -->
+                    <tr>
+                        <td style="background-color: #EEF2FF; padding: 1.5rem; font-size: 1rem; line-height: 1.5rem;">
+                            <p style="margin-bottom: 1rem;">
+                                Hello <%= firstName %>,
+                            </p>
+
+                            <p style="margin-bottom: 1rem;">
+                                You have been invited to join TypeCrafters HQ as an administrator.
+                                Please confirm your email address by clicking the button below.
+                            </p>
+
+                            <!-- BEGIN BUTTON -->
+                            <table cellpadding="0" cellspacing="0" border="0" align="center"
+                                style="margin: 1.5rem auto;">
+                                <tr>
+                                    <td align="center" style="
+                                        background-color: #4f46e5; /* tailwind indigo-600 */
+                                        border-radius: 4px;
+                                    ">
+                                        <a href="<%= url %>" target="_blank" style="
+                                            display: inline-block;
+                                            padding: 0.5rem 1.5rem;
+                                            font-size: 14px;
+                                            font-weight: bold;
+                                            color: white;
+                                            text-decoration: none;
+                                        ">
+                                            Confirm Email
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <!-- END BUTTON -->
+
+                            <p style="margin-bottom: 1rem;">
+                                Once in the application, you'll be asked to create a password for your account.
+                                This invitation link will expire in 24 hours. If you were not expecting this
+                                invitation, you can safely ignore this email.
+                            </p>
+                            <p style="margin: 0;">
+                                Thanks,<br />
+                                - The Team at TypeCrafters.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- END BODY -->
+                    <!-- BEGIN FOOTER -->
+                    <tr>
+                        <td style="
+                            background-color: white;
+                            padding: 16px 1.5rem;
+                            font-size: 12px;
+                            color: #6b7280;
+                            text-align: center;
+                        ">
+                            &copy; <%= new Date().getFullYear() %> 
+                            TypeCrafters. All rights reserved. 
+                            Please do not reply to this email.
+                        </td>
+                    </tr>
+                    <!-- END FOOTER -->
+
+                </table>
+                <!-- END CONTENT -->
+            </td>
+        </tr>
+    </table>
+    <!-- END CONTAINER -->
+</body>
+
+</html>

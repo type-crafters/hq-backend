@@ -1,0 +1,31 @@
+{
+    "name": "hq-finalize-user",
+    "version": "0.1.0",
+    "type": "module",
+    "files": [
+        "dist"
+    ],
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "test": "node --import tsx --experimental-test-module-mocks --test test/**/*.spec.ts"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "private": true,
+    "devDependencies": {
+        "@typecrafters/hq-lib": "file:../../hq-lib",
+        "@typecrafters/hq-types": "file:../../hq-types",
+        "@types/aws-lambda": "^8.10.161",
+        "@types/bcrypt": "^6.0.0",
+        "@types/node": "^25.3.2",
+        "bcrypt": "^6.0.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.1000.0",
+        "@aws-sdk/lib-dynamodb": "^3.1000.0"
+    }
+}
