@@ -122,7 +122,6 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                 message: "Token verified. Session extended."
             } satisfies JSONResponse)
             .build();
-
     } catch (error) {
         logger.error(error);
         if (error instanceof ExpiredTokenError) return unauthorized;

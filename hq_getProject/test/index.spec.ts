@@ -2,7 +2,7 @@
 import assert from "assert";
 import { type APIGatewayProxyEventV2 } from "aws-lambda";
 import { beforeEach, describe, mock, test, type TestContext } from "node:test";
-import { DynamoDBDocumentClient, ScanCommand, ScanCommandOutput } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, GetCommandOutput } from "@aws-sdk/lib-dynamodb";
 import { JSONResponse, ProjectResponse, ProjectStatus } from "@typecrafters/hq-types";
 
 let gsurl: (...args: any[]) => string;
@@ -12,7 +12,7 @@ mock.module("@aws-sdk/s3-request-presigner", {
     }
 });
 
-describe("hq_listProjects tests", () => {
+describe("hq_getProject tests", () => {
     let event: APIGatewayProxyEventV2;
     beforeEach((c) => {
         const ctx = c as TestContext;
@@ -20,25 +20,22 @@ describe("hq_listProjects tests", () => {
         gsurl = (...args: any[]) => "s3://image.png?expiresIn=3600";
 
         ctx.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
-            if (command instanceof ScanCommand) {
+            if (command instanceof GetCommand) {
                 return {
                     $metadata: {},
-                    Items: [
-                        {
-                            id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c",
-                            projectName: "Fatebound",
-                            thumbnailUrl: "https://example.com/image.png",
-                            status: ProjectStatus.Planning,
-                            description: "lorem ipsum dolor sit amet",
-                            content: "lorem ipsum dolor sit amet",
-                            tags: ["3D", "Action/Adventure", "Open World"],
-                            href: "https://www.google.com/",
-                            createdAt: Date.now(),
-                            lastUpdatedAt: Date.now()
-                        }
-                    ],
-                    LastEvaluatedKey: undefined
-                } satisfies ScanCommandOutput;
+                    Item: {
+                        id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c",
+                        projectName: "Fatebound",
+                        thumbnailUrl: "https://example.com/image.png",
+                        status: ProjectStatus.Planning,
+                        description: "lorem ipsum dolor sit amet",
+                        content: "lorem ipsum dolor sit amet",
+                        tags: ["3D", "Action/Adventure", "Open World"],
+                        href: "https://www.google.com/",
+                        createdAt: Date.now(),
+                        lastUpdatedAt: Date.now()
+                    }
+                } satisfies GetCommandOutput;
             }
         });
 
@@ -49,8 +46,8 @@ describe("hq_listProjects tests", () => {
 
         event = {
             version: "2.0",
-            routeKey: "GET /projects",
-            rawPath: "/projects",
+            routeKey: "GET /projects/{id}",
+            rawPath: "/projects/45f96ae4-e51f-465f-ac81-3dd26dc69e9c",
             rawQueryString: "",
             headers: { "content-type": "application/json" },
             requestContext: {
@@ -60,18 +57,18 @@ describe("hq_listProjects tests", () => {
                 domainPrefix: "example",
                 http: {
                     method: "GET",
-                    path: "/projects",
+                    path: "/projects/45f96ae4-e51f-465f-ac81-3dd26dc69e9c",
                     protocol: "HTTP/1.1",
                     sourceIp: "127.0.0.1",
                     userAgent: "node:test"
                 },
                 requestId: "12354678",
-                routeKey: "GET /projects",
+                routeKey: "GET /projects/{id}",
                 stage: "$default",
                 time: new Date().toISOString(),
                 timeEpoch: Date.now()
             },
-            body: undefined,
+            pathParameters: { id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c" },
             isBase64Encoded: false
         };
     });
@@ -89,112 +86,54 @@ describe("hq_listProjects tests", () => {
         const body: JSONResponse<ProjectResponse> = JSON.parse(response.body);
         assert.ok(body.success);
         assert.ok(body.message);
-        assert.ok(body.items && body.items.length > 0);
+        assert.ok(body.item && body.item.projectName);
     });
 
-    test("No projects retrieved", async (t) => {
+    test("APIGatewayProxyEventV2 has missing path parameters", async (t) => {
         // Test setup
-        t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
-            if (command instanceof ScanCommand) {
-                return {
-                    $metadata: {},
-                    Items: []
-                } satisfies ScanCommandOutput;
-            }
-        });
+        delete event.pathParameters;
 
         // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
         // Evaluation metrics
-        assert.equal(response.statusCode, 200);
+        assert.equal(response.statusCode, 400);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(body.success);
+        assert.ok(!body.success);
         assert.ok(body.message);
     });
 
-    test("Query with invalid limit parameter", async (t) => {
+    test("APIGatewayProxyEventV2 has empty id path parameter", async (t) => {
         // Test setup
-        event.rawQueryString = "limit=invalid";
-        event.queryStringParameters = { limit: "invalid" };
+        event.pathParameters = {
+            id: undefined
+        }
 
         // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
         // Evaluation metrics
-        assert.equal(response.statusCode, 200);
+        assert.equal(response.statusCode, 400);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse<ProjectResponse> = JSON.parse(response.body);
-        assert.ok(body.success);
+        const body: JSONResponse = JSON.parse(response.body);
+        assert.ok(!body.success);
+        assert.ok(body.message);
     });
 
-    test("Query with valid cursor parameter", async (t) => {
-        // Test setup
-        const cursorObj = { id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c" };
-        const cursorEncoded = Buffer.from(JSON.stringify(cursorObj)).toString("base64url");
-        event.rawQueryString = `cursor=${cursorEncoded}`;
-        event.queryStringParameters = { cursor: cursorEncoded };
-
-        // Test execution
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        // Evaluation metrics
-        assert.equal(response.statusCode, 200);
-        assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse<ProjectResponse> = JSON.parse(response.body);
-        assert.ok(body.success);
-    });
-
-    test("Query with invalid cursor parameter", async (t) => {
-        // Test setup
-        event.rawQueryString = "cursor=invalid!!!";
-        event.queryStringParameters = { cursor: "invalid!!!" };
-
-        // Test execution
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        // Evaluation metrics
-        assert.equal(response.statusCode, 200);
-        assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse<ProjectResponse> = JSON.parse(response.body);
-        assert.ok(body.success);
-    });
-
-    test("Response includes cursor when LastEvaluatedKey exists", async (t) => {
+    test("Project with the specified id not found", async (t) => {
         // Test setup
         t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
-            if (command instanceof ScanCommand) {
+            if (command instanceof GetCommand) {
                 return {
-                    $metadata: {},
-                    Items: [
-                        {
-                            id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c",
-                            projectName: "Fatebound",
-                            thumbnailUrl: "https://example.com/image.png",
-                            status: ProjectStatus.Planning,
-                            description: "lorem ipsum dolor sit amet",
-                            content: "lorem ipsum dolor sit amet",
-                            tags: ["3D", "Action/Adventure"],
-                            href: "https://www.google.com/",
-                            createdAt: Date.now(),
-                            lastUpdatedAt: Date.now()
-                        }
-                    ],
-                    LastEvaluatedKey: { id: "45f96ae4-e51f-465f-ac81-3dd26dc69e9c" }
-                } satisfies ScanCommandOutput;
+                    $metadata: {}
+                } satisfies GetCommandOutput;
             }
         });
 
@@ -203,13 +142,13 @@ describe("hq_listProjects tests", () => {
         const response = await handler(event);
 
         // Evaluation metrics
-        assert.equal(response.statusCode, 200);
+        assert.equal(response.statusCode, 404);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse<ProjectResponse> = JSON.parse(response.body);
-        assert.ok(body.success);
-        assert.ok(body.cursor);
+        const body: JSONResponse = JSON.parse(response.body);
+        assert.ok(!body.success);
+        assert.ok(body.message);
     });
 
     test("DynamoDBDocumentClient class throws error", async (t) => {
