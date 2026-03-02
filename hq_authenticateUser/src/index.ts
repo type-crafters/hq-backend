@@ -147,7 +147,7 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
         do {
             await ddb.send(new BatchWriteCommand({
                 RequestItems: {
-                    REFRESH_TOKEN_TABLE: jtis.slice(offset, offset + limit).map(jti => ({
+                    [REFRESH_TOKEN_TABLE]: jtis.slice(offset, offset + limit).map(jti => ({
                         DeleteRequest: { 
                             Key: { jti }
                         }

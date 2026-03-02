@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { type AccessTokenClaims, type JSONResponse, type RefreshTokenClaims } from "@typecrafters/hq-types";
 import { HttpResponse, HttpCode, LoggerFactory, type ResponseObject, Cookie, ExpiredTokenError, InvalidTokenError, Authenticator } from "@typecrafters/hq-lib";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 const region = "us-east-1";

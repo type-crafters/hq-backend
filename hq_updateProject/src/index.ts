@@ -1,13 +1,13 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { ProjectStatus, type JSONResponse } from "@typecrafters/hq-types";
+import { ProjectStatus, type JSONResponse, type ProjectItem, type ProjectResponse, type UpdateProjectRequest } from "@typecrafters/hq-types";
 import { HttpResponse, HttpCode, LoggerFactory, type ResponseObject } from "@typecrafters/hq-lib";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 const region = "us-east-1";
 const PROJECT_TABLE = process.env.PROJECT_TABLE;
 
-assert(PROJECT_TABLE, "Missing required environment variable 'PROJECT_TABLE'");
+if (!PROJECT_TABLE) throw new Error("Missing required environment variable 'PROJECT_TABLE'");
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
 
@@ -39,8 +39,9 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
         }
 
         let data;
+
         try {
-            data = JSON.parse(body);
+            data = JSON.parse(body) as UpdateProjectRequest;
         } catch (error) {
             if (error instanceof SyntaxError) {
                 return HttpResponse.builder()
@@ -54,41 +55,20 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
             throw error;
         }
 
-        const { projectName, thumbnailUrl, description, content, status, tags } = data;
-
         if (
-            projectName === undefined &&
-            thumbnailUrl === undefined &&
-            description === undefined &&
-            content === undefined &&
-            status === undefined &&
-            tags === undefined
-        ) {
-            return HttpResponse.builder()
-                .status(HttpCode.BadRequest)
-                .json({
-                    success: false,
-                    message: "At least one field must be provided for update."
-                } satisfies JSONResponse)
-                .build();
-        }
-
-        const { projectName, thumbnailUrl, description, content, status, tags, href }: UpdateProjectRequest = data;
-
-        if (
-            typeof projectName !== "string" || !projectName
+            (data.projectName && typeof data.projectName !== "string")
             ||
-            typeof thumbnailUrl !== "string" || !thumbnailUrl
+            (data.thumbnailUrl && typeof data.thumbnailUrl !== "string")
             ||
-            typeof description !== "string" || !description
+            (data.description && typeof data.description !== "string")
             ||
-            (content && typeof content !== "string")
+            (data.content && typeof data.content !== "string")
             ||
-            typeof status !== "string" || !Object.values(ProjectStatus).includes(status)
+            (data.href && typeof data.href !== "string")
             ||
-            !Array.isArray(tags) || tags.some(t => typeof t !== "string")
-            || 
-            typeof tags !== "string" || !tags
+            (data.status && !Object.values(ProjectStatus).includes(data.status))
+            ||
+            (data.tags && !(Array.isArray(data.tags) && data.tags.every(t => typeof t === "string")))
         ) {
             return HttpResponse.builder()
                 .status(HttpCode.BadRequest)
@@ -99,56 +79,72 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                 .build();
         }
 
-        // Build update expression and attribute values
-        const updateParts: string[] = [];
-        const attributeValues: Record<string, any> = {};
-        const fieldConfigs: Record<string, { needsAttributeName?: boolean }> = {
-            projectName: {},
-            thumbnailUrl: {},
-            description: {},
-            content: {},
-            status: { needsAttributeName: true },
-            tags: {}
-        };
+        let UpdateExpression: string = "";
+        const expr: string[] = [];
+        const ExpressionAttributeNames: Record<string, string> = {};
+        const ExpressionAttributeValues: Record<string, any> = {};
 
-        let expressionIndex = 0;
-        const fieldData = { projectName, thumbnailUrl, description, content, status, tags };
+        Object.entries(data).forEach(([name, value]) => {
+            if (value == null) return;
+            expr.push(`#${name} = :${name}`);
+            ExpressionAttributeNames[`#${name}`] = name;
+            ExpressionAttributeValues[`:${name}`] = value;
+        });
 
-        for (const [field, value] of Object.entries(fieldData)) {
-            if (value !== undefined) {
-                const config = fieldConfigs[field];
-                const placeholder = `:val${expressionIndex}`;
-                const fieldName = config?.needsAttributeName ? `#${field}` : field;
-                
-                updateParts.push(`${fieldName} = ${placeholder}`);
-                attributeValues[placeholder] = field === "tags" ? new Set(value as string[]) : value;
-                expressionIndex++;
+        if (expr.length) {
+            expr.push("#lastUpdatedAt = :timestamp");
+            ExpressionAttributeNames["#lastUpdatedAt"] = "lastUpdatedAt";
+            ExpressionAttributeValues[":timestamp"] = Date.now();
+            UpdateExpression = `SET ${expr.join(", ")}`;
+
+            try {
+                const result = await ddb.send(new UpdateCommand({
+                    TableName: PROJECT_TABLE,
+                    Key: { id },
+                    UpdateExpression,
+                    ExpressionAttributeNames,
+                    ExpressionAttributeValues,
+                    ReturnValues: "ALL_NEW",
+                    ConditionExpression: "attribute_exists(id)",
+                }));
+
+                const attributes = result.Attributes as ProjectItem;
+
+                const item = {
+                    ...attributes,
+                    tags: Array.from(attributes.tags ?? [])
+                } satisfies ProjectResponse;
+
+                return HttpResponse.builder()
+                    .status(HttpCode.OK)
+                    .json({
+                        success: true,
+                        message: "Project successfully updated.",
+                        item: item
+                    } satisfies JSONResponse<ProjectResponse>)
+                    .build();
+
+            } catch (error) {
+                if (error instanceof ConditionalCheckFailedException) {
+                    return HttpResponse.builder()
+                        .status(HttpCode.NotFound)
+                        .json({
+                            success: false,
+                            message: "Project not found."
+                        })
+                        .build();
+                }
+                throw error;
             }
+        } else {
+            return HttpResponse.builder()
+                .status(HttpCode.OK)
+                .json({
+                    success: true,
+                    message: "No fields updated.",
+                } satisfies JSONResponse)
+                .build();
         }
-
-        updateParts.push(`lastUpdatedAt = :timestamp`);
-        attributeValues[`:timestamp`] = Date.now();
-
-        const updateExpression = `SET ${updateParts.join(", ")}`;
-        const expressionAttributeNames = status !== undefined ? { "#status": "status" } : undefined;
-
-        const result = await ddb.send(new UpdateCommand({
-            TableName: PROJECT_TABLE,
-            Key: { id },
-            UpdateExpression: updateExpression,
-            ExpressionAttributeValues: attributeValues,
-            ExpressionAttributeNames: expressionAttributeNames,
-            ReturnValues: "ALL_NEW"
-        }));
-
-        return HttpResponse.builder()
-            .status(HttpCode.OK)
-            .json({
-                success: true,
-                message: "Project successfully updated.",
-                item: result.Attributes
-            } satisfies JSONResponse)
-            .build();
     } catch (error) {
         logger.error(error);
         return HttpResponse.builder()
