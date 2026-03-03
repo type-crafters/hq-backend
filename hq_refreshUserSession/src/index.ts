@@ -39,7 +39,7 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
 
             if (!accessCookie || !refreshCookie) return unauthorized;
         } catch (error) {
-            if (error instanceof TypeError) return unauthorized;
+            if (error instanceof SyntaxError) return unauthorized;
             throw error;
         }
 

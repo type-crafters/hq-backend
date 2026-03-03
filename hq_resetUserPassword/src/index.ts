@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { HttpCode, HttpResponse, LoggerFactory, type ResponseObject } from "@typecrafters/hq-lib";
-import { UserStatus, type FinalizeUserRequest, type JSONResponse } from "@typecrafters/hq-types";
+import { UserStatus, type JSONResponse, type ResetPasswordRequest } from "@typecrafters/hq-types";
 import { createHash } from "node:crypto";
 import { DynamoDBDocumentClient, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -52,7 +52,7 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                 .build();
         }
 
-        let data: FinalizeUserRequest;
+        let data;
 
         try {
             data = JSON.parse(body);
@@ -69,7 +69,7 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
             throw error;
         }
 
-        const { password, confirmPassword } = data;
+        const { password, confirmPassword }: ResetPasswordRequest = data;
 
         if (
             !password || typeof password !== "string"
@@ -122,15 +122,13 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                         Update: {
                             TableName: USER_TABLE,
                             Key: { id: sub },
-                            UpdateExpression: "SET #password = :password, #status = :status, #lastUpdatedAt = :lastUpdatedAt",
+                            UpdateExpression: "SET #password = :password, #lastUpdatedAt = :lastUpdatedAt",
                             ExpressionAttributeNames: {
                                 "#password": "password",
-                                "#status": "status",
                                 "#lastUpdatedAt": "lastUpdatedAt"
                             },
                             ExpressionAttributeValues: {
                                 ":password": passwordHash,
-                                ":status": UserStatus.Active,
                                 ":lastUpdatedAt": now
                             },
                             ConditionExpression: "attribute_exists(id)"

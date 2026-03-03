@@ -1,0 +1,28 @@
+{
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "test"
+    ],
+    "compilerOptions": {
+        "strict": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "rootDir": "src",
+        "types": [
+            "node",
+            "aws-lambda"
+        ],
+        "declaration": true,
+        "declarationMap": false,
+        "outDir": "dist",
+        "removeComments": true,
+        "sourceMap": false,
+        "esModuleInterop": true,
+        "verbatimModuleSyntax": true,
+        "target": "esnext"
+    }
+}

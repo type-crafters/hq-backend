@@ -53,13 +53,9 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                 return unauthorized;
             }
         } catch (error) {
-            if (error instanceof TypeError) {
-                logger.error("One or more request cookies was malformed.");
-                return unauthorized;
-            } else if (error instanceof InvalidTokenError) {
-                logger.error("Invalid token.");
-                return unauthorized;
-            }
+            if (error instanceof SyntaxError) return unauthorized;
+            if (error instanceof ExpiredTokenError) return unauthorized;
+            if (error instanceof InvalidTokenError) return unauthorized
             throw error;
         }
 

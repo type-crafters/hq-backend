@@ -9,16 +9,13 @@ from subprocess import CalledProcessError
 from typing import Callable, Optional, Literal
 from zipfile import ZipFile, ZIP_DEFLATED
 
-
 ROOT_DIR = path.abspath('.')
 DIST_DIR = path.join(ROOT_DIR, 'dist')
 
-
 """
---------------------------------------------------
 Utilities
---------------------------------------------------
 """
+
 
 def abortable(fn: Callable):
     @wraps(fn)
@@ -26,15 +23,16 @@ def abortable(fn: Callable):
         try:
             return fn(*args, **kwargs)
         except KeyboardInterrupt:
-            print("Operation aborted.")
+            print('Operation aborted.')
             exit(1)
+
     return wrapper
 
 
 def assert_node_project(directory: str) -> bool:
     package_json = path.join(directory, 'package.json')
     if not path.isfile(package_json):
-        print(f"Skipping '{path.basename(directory)}' (not a Node project)")
+        print(f"❔ Skipping '{path.basename(directory)}' (not a Node project)")
         return False
 
     try:
@@ -54,14 +52,19 @@ def run_cmd(cmd: list[str], cwd: str, capture: bool = True):
         shell=True,
         check=True,
         capture_output=capture,
-        text=True
+        text=True,
     )
 
+def write_error(e: CalledProcessError, log_path: str, cmd: str):
+    with open(log_path, 'a+', encoding='utf-8') as log:
+        log.write(f"[{datetime.now()}] Script '{cmd}' failed\n")
+        if e.stdout:
+            log.write(f"stdout:\n{e.stdout}\n\n")
+        if e.stderr:
+            log.write(f"stderr:\n{e.stderr}\n\n")
 
 """
---------------------------------------------------
 Core Operations
---------------------------------------------------
 """
 
 def restore(directory: str, clean: bool = False, omit: Optional[Literal['dev']] = None):
@@ -71,14 +74,16 @@ def restore(directory: str, clean: bool = False, omit: Optional[Literal['dev']] 
     cmd = ['npm', 'ci'] if clean else ['npm', 'install']
 
     if omit:
-        cmd.append(f'--omit={omit}')
+        cmd.append(f"--omit={omit}")
 
     print(f"Restoring packages in '{path.basename(directory)}'...")
     try:
         run_cmd(cmd, cwd=directory)
-        print("✅ Packages restored")
-    except CalledProcessError:
-        print("❌ Failed to restore packages")
+        print('✅ Packages restored')
+    except CalledProcessError as e:
+        log_path = path.join(directory, 'build-process.log')
+        write_error(e, log_path, cmd)
+        print(f"❌ Failed to restore packages. See {log_path}")
 
 
 def npm_run(script: str, directory: str, show_output: bool = False):
@@ -97,14 +102,10 @@ def npm_run(script: str, directory: str, show_output: bool = False):
 
     try:
         run_cmd(['npm', 'run', script], cwd=directory, capture=not show_output)
-        print("✅ Script succeeded")
+        print('✅ Script succeeded')
     except CalledProcessError as e:
         log_path = path.join(directory, 'build-process.log')
-        with open(log_path, 'a+', encoding='utf-8') as log:
-            log.write(
-                f"[{datetime.now()}] Script '{script}' failed\n"
-                f"stdout:\n{e.stdout}\n\nstderr:\n{e.stderr}\n\n"
-            )
+        write_error(e, log_path, script)
 
         print(f"❌ Script failed. See {log_path}")
 
@@ -133,14 +134,13 @@ def zip_directory(source: str, output_name: str, ignore: list[str] = []):
 
         print(f"✅ Created {dest}")
     except Exception:
-        print("❌ Failed to create zip")
+        print('❌ Failed to create zip')
 
 
 """
---------------------------------------------------
 Lambda Packaging
---------------------------------------------------
 """
+
 
 @abortable
 def install_lambda(args: Namespace):
@@ -152,10 +152,13 @@ def install_lambda(args: Namespace):
         print(f"Installing packages in '{name}'...")
 
         try:
-            run_cmd('npm install', cwd=directory)
-            print("✅ Packages installed\n")
-        except CalledProcessError:
-            print(f"❌ Failed to install in '{name}'\n")
+            run_cmd(['npm', 'install'], cwd=directory)
+            print('✅ Packages installed\n')
+        except CalledProcessError as e:
+            log_path = path.join(directory, 'build-process.log')
+            write_error(e, log_path, 'npm install')
+            print(f"❌ Failed to install in '{name}'. See {log_path}\n")
+
 
 @abortable
 def restore_lambda(args: Namespace):
@@ -177,31 +180,45 @@ def package_lambda(args: Namespace):
         zip_directory(
             source=directory,
             output_name=zip_name,
-            ignore=[
-                'src/**/*',
-                'package-lock.json',
-                '*.log',
-                '**/test/**/*'
-            ]
+            ignore=['src/**/*', 'package-lock.json', '*.log', '**/test/**/*'],
         )
 
 
+@abortable
+def package_lambda(args: Namespace):
+    for directory in resolve_projects(args):
+        name = path.basename(directory)
+        zip_name = f"{name}.zip"
+
+        restore(directory)
+        npm_run('test', directory, show_output=True)
+        npm_run('build', directory)
+        restore(directory, clean=True, omit='dev')
+
+        zip_directory(
+            source=directory,
+            output_name=zip_name,
+            ignore=['src/**/*', 'package-lock.json', '*.log', '**/test/**/*'],
+        )
+
+
+@abortable
+def test_lambda(args: Namespace):
+    for directory in resolve_projects(args):
+        restore(directory)
+        npm_run('test', directory, show_output=True)
+
+
 """
---------------------------------------------------
 Project Resolution
---------------------------------------------------
 """
 
-def resolve_projects(args: Namespace):
+def resolve_projects(args: Namespace, ignore: list[str] = ['.git', 'dist']):
     if not args.all and not args.projects:
-        raise ValueError("Provide project names or use --all")
+        raise ValueError('Provide project names or use --all')
 
     if args.all:
-        return [
-            entry.path
-            for entry in scandir(ROOT_DIR)
-            if entry.is_dir()
-        ]
+        return [entry.path for entry in scandir(ROOT_DIR) if entry.is_dir() and entry.name not in ignore]
 
     return [
         path.join(ROOT_DIR, name)
@@ -209,11 +226,11 @@ def resolve_projects(args: Namespace):
         if path.isdir(path.join(ROOT_DIR, name))
     ]
 
+
 """
---------------------------------------------------
 CLI
---------------------------------------------------
 """
+
 
 def main():
     parser = ArgumentParser(prog='lambda-tools')
@@ -232,22 +249,16 @@ def main():
     package_cmd.set_defaults(fn=package_lambda)
 
     # install
-    install_cmd = subparsers.add_parser(
-        'install',
-        help='Install dependencies in one or more Lambda projects.'
-    )
-    install_cmd.add_argument(
-        'projects',
-        nargs='*',
-        help='Lambda project directories to install.'
-    )
-    install_cmd.add_argument(
-        '-a',
-        '--all',
-        action='store_true',
-        help='Install in all Lambda directories.'
-    )
+    install_cmd = subparsers.add_parser('install')
+    install_cmd.add_argument('projects', nargs='*')
+    install_cmd.add_argument('-a', '--all', action='store_true')
     install_cmd.set_defaults(fn=install_lambda)
+
+    # install
+    test_cmd = subparsers.add_parser('test')
+    test_cmd.add_argument('projects', nargs='*')
+    test_cmd.add_argument('-a', '--all', action='store_true')
+    test_cmd.set_defaults(fn=test_lambda)
 
     args = parser.parse_args()
 
@@ -255,6 +266,7 @@ def main():
         args.fn(args)
     else:
         parser.print_help()
+
 
 if __name__ == '__main__':
     main()

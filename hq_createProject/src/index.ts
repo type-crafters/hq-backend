@@ -46,7 +46,7 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                     .build();
             }
         } catch (error) {
-            if (error instanceof TypeError) return unauthorized;
+            if (error instanceof SyntaxError) return unauthorized;
             if (error instanceof ExpiredTokenError) return unauthorized;
             if (error instanceof InvalidTokenError) return unauthorized
             throw error;
@@ -93,8 +93,6 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
             typeof status !== "string" || !Object.values(ProjectStatus).includes(status)
             ||
             !Array.isArray(tags) || tags.some(t => typeof t !== "string")
-            || 
-            typeof tags !== "string" || !tags
         ) {
             return HttpResponse.builder()
                 .status(HttpCode.BadRequest)

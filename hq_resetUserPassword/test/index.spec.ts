@@ -1,76 +1,70 @@
 /// <reference types="node" />
-import { describe, test, beforeEach, type TestContext } from "node:test";
+import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, TransactWriteCommand, TransactWriteCommandOutput } from "@aws-sdk/lib-dynamodb";
+import { JSONResponse } from "@typecrafters/hq-types";
 import assert from "assert";
-import { CreateProjectRequest, JSONResponse, ProjectStatus } from "@typecrafters/hq-types";
-import { APIGatewayProxyEventV2 } from "aws-lambda";
-import { DynamoDBDocumentClient, PutCommand, PutCommandOutput } from "@aws-sdk/lib-dynamodb";
-import { Authenticator, InvalidTokenError } from "@typecrafters/hq-lib";
+import type { APIGatewayProxyEventV2 } from "aws-lambda";
+import { beforeEach, describe, test, type TestContext } from "node:test";
+import bcrypt from "bcrypt";
 
-describe("hq_createProject tests", () => {
+describe("hq_finalizeUser tests", () => {
     let event: APIGatewayProxyEventV2;
-
     beforeEach((c) => {
         const ctx = c as TestContext;
-
-
-        ctx.mock.method(Authenticator.prototype, "getPermissions", (...args: any[]) => ["create:project"]);
-
         ctx.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
-            if (command instanceof PutCommand) return {
-                $metadata: {}
-            } satisfies PutCommandOutput;
+            if (command instanceof TransactWriteCommand) {
+                return {
+                    $metadata: {}
+                } satisfies TransactWriteCommandOutput;
+            }
         });
 
         ctx.mock.property(process, "env", {
-            PROJECT_TABLE: "ProjectTable",
-            ACCESS_SECRET: "access_secret"
+            USER_TABLE: "UserTable",
+            VERIFICATION_TOKEN_TABLE: "VerificationTokenTable"
         });
+
+        ctx.mock.method(bcrypt, "hash", async (...args: any[]) => "$2b$10$hashedPassword");
 
         event = {
             version: "2.0",
-            routeKey: "POST /projects",
-            rawPath: "/projects",
-            rawQueryString: "",
-            cookies: [
-                "accessToken=inXIHp-epkvNwC-xd1fm4JUwkY7PpWwnhpGyOxo15aM"
-            ],
+            routeKey: "POST /users/confirm",
+            rawPath: "/users/confirm",
+            rawQueryString: "token=GomTlMmvfS8JAI9W_n0USLLBk0Y2f1xbqTgVXdmJCeo&sub=814bfd71-21f4-4dd8-b7c7-b4bbdf0a98e7",
+            cookies: [],
             headers: {
-                "content-type": "application/json",
-                "user-agent": "node:test",
-                "host": "example.execute-api.us-east-1.amazonaws.com"
+                "content-type": "application/json"
             },
-            queryStringParameters: {},
+            queryStringParameters: {
+                token: "GomTlMmvfS8JAI9W_n0USLLBk0Y2f1xbqTgVXdmJCeo",
+                sub: "814bfd71-21f4-4dd8-b7c7-b4bbdf0a98e7"
+            },
             requestContext: {
-                accountId: "123456789012",
-                apiId: "testAPI",
-                domainName: "example.execute-api.us-east-1.amazonaws.com",
-                domainPrefix: "example",
+                accountId: "12345678",
+                apiId: "hq-api",
+                domainName: "",
+                domainPrefix: "",
                 http: {
                     method: "POST",
-                    path: "/projects",
-                    protocol: "HTTP/1.1",
+                    path: "/users/confirm",
+                    protocol: "HTTP 1.1",
                     sourceIp: "127.0.0.1",
                     userAgent: "node:test"
                 },
-                requestId: "12354678",
-                routeKey: "POST /projects",
+                requestId: "12345678",
+                routeKey: "POST /users/confirm",
                 stage: "$default",
                 time: new Date().toISOString(),
-                timeEpoch: Date.now()
+                timeEpoch: Date.now(),
             },
             body: JSON.stringify({
-                projectName: "FateBound",
-                thumbnailUrl: "https://example.com/image.png",
-                status: ProjectStatus.Development,
-                description: "lorem ipsum dolor sit amet",
-                content: "lorem ipsum dolor sit amet",
-                tags: ["3D", "Action/Adventure", "Open World"],
-                href: "https://www.google.com/"
-            } satisfies CreateProjectRequest),
-            pathParameters: {},
+                password: "Password123;",
+                confirmPassword: "Password123;"
+            }),
+            pathParameters: undefined,
             isBase64Encoded: false,
-            stageVariables: {}
-        };
+            stageVariables: undefined
+        }
     });
 
     test("All in order", async (t) => {
@@ -78,9 +72,7 @@ describe("hq_createProject tests", () => {
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        console.log(response.body);
-        // Evaluation metrics
-        assert.equal(response.statusCode, 201);
+        assert.equal(response.statusCode, 200);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
@@ -89,16 +81,17 @@ describe("hq_createProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 has a missing cookies array", async (t) => {
+    test("APIGatewayProxyEventV2 has a missing or empty querystring", async (t) => {
         // Test setup
-        delete event.cookies;
+        event.rawQueryString = "";
+        delete event.queryStringParameters;
 
         // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
         // Evaluation metrics
-        assert.equal(response.statusCode, 401);
+        assert.equal(response.statusCode, 400);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
@@ -107,16 +100,18 @@ describe("hq_createProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 contains malformed cookies", async (t) => {
+    test("APIGatewayProxyEventV2 is missing required querystring parameters", async (t) => {
         // Test setup
-        event.cookies = ["{ invalid cookie }"];
+        event.queryStringParameters = {
+            sub: "814bfd71-21f4-4dd8-b7c7-b4bbdf0a98e7"
+        };
 
         // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
         // Evaluation metrics
-        assert.equal(response.statusCode, 401);
+        assert.equal(response.statusCode, 400);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
         assert.equal(response.headers["Content-Type"], "application/json");
@@ -125,63 +120,7 @@ describe("hq_createProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("Cookies array is missing accessToken cookie", async (t) => {
-        // Test setup
-        event.cookies = ["refreshToken=RscHaYs-JkVKhM4H2xAISIUXsogAWnTzyc5MTY3pZqc"];
-
-        // Test execution
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        // Evaluation metrics
-        assert.equal(response.statusCode, 401);
-        assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
-        assert.ok(body.message);
-    });
-
-    test("accessToken cookie is invalid or expired", async (t) => {
-        // Test setup
-        t.mock.method(Authenticator.prototype, "getPermissions", (...args: any) => {
-            throw new InvalidTokenError("EVIL Authenticator invalidates all your tokens!!");
-        });
-
-        // Test execution
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        // Evaluation metrics
-        assert.equal(response.statusCode, 401);
-        assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
-        assert.ok(body.message);
-    });
-
-    test("User is not authorized to create projects", async (t) => {
-        // Test setup
-        t.mock.method(Authenticator.prototype, "getPermissions", (...args: any) => []);
-
-        // Test execution
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        // Evaluation metrics
-        assert.equal(response.statusCode, 403);
-        assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
-        assert.ok(body.message);
-    });
-
-    test("APIGatewayProxyEventV2 has an empty or missing request body", async (t) => {
+    test("APIGatewayProxyEventV2 has a missing or empty body", async (t) => {
         // Test setup
         delete event.body;
 
@@ -201,7 +140,7 @@ describe("hq_createProject tests", () => {
 
     test("APIGatewayProxyEventV2 has a malformed body", async (t) => {
         // Test setup
-        event.body = "{ invalid json }"
+        event.body = "{ invalid json }";
 
         // Test execution
         const { handler } = await import("../src/index.js");
@@ -217,10 +156,10 @@ describe("hq_createProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("Request body is missing required fields", async (t) => {
+    test("Event body is missing required fields", async (t) => {
         // Test setup
         event.body = JSON.stringify({
-            projectName: "FateBound"
+            confirmPassword: "Password123;"
         });
 
         // Test execution
@@ -237,10 +176,77 @@ describe("hq_createProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("DynamoDBDocumentClient class throws error", async (t) => {
+    test("Provided password is weak", async (t) => {
+        // Test setup
+        event.body = JSON.stringify({
+            password: "hello",
+            confirmPassword: "hello"
+        });
+
+        // Test execution
+        const { handler } = await import("../src/index.js");
+        const response = await handler(event);
+
+        // Evaluation metrics
+        assert.equal(response.statusCode, 400);
+        assert.ok(response.body);
+        assert.ok(response.headers && response.headers["Content-Type"]);
+        assert.equal(response.headers["Content-Type"], "application/json");
+        const body: JSONResponse = JSON.parse(response.body);
+        assert.ok(!body.success);
+        assert.ok(body.message);
+    });
+
+    test("Passwords do not match", async (t) => {
+        // Test setup
+        event.body = JSON.stringify({
+            password: "Password123;",
+            confirmPassword: "Pass_word_456"
+        });
+
+        // Test execution
+        const { handler } = await import("../src/index.js");
+        const response = await handler(event);
+
+        // Evaluation metrics
+        assert.equal(response.statusCode, 400);
+        assert.ok(response.body);
+        assert.ok(response.headers && response.headers["Content-Type"]);
+        assert.equal(response.headers["Content-Type"], "application/json");
+        const body: JSONResponse = JSON.parse(response.body);
+        assert.ok(!body.success);
+        assert.ok(body.message);
+    });
+
+    test("An error occurs in the DynamoDB transaction.", async (t) => {
         // Test setup
         t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
-            throw new Error("EVIL DynamoDB will not store your project information!!");
+            if (command instanceof TransactWriteCommand) {
+                throw new TransactionCanceledException({
+                    $metadata: {},
+                    message: "EVIL DynamoDB is not ACID!!"
+                });
+            }
+        });
+
+        // Test execution
+        const { handler } = await import("../src/index.js");
+        const response = await handler(event);
+
+        // Evaluation metrics
+        assert.equal(response.statusCode, 404);
+        assert.ok(response.body);
+        assert.ok(response.headers && response.headers["Content-Type"]);
+        assert.equal(response.headers["Content-Type"], "application/json");
+        const body: JSONResponse = JSON.parse(response.body);
+        assert.ok(!body.success);
+        assert.ok(body.message);
+    });
+
+    test("DynamoDBDocumentClient class fails", async (t) => {
+        // Test setup
+        t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: any) => {
+            throw new Error("EVIL DynamoDB will not update your users!!");
         });
 
         // Test execution

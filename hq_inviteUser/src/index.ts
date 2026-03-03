@@ -27,6 +27,13 @@ import { readFileSync } from "fs";
 import path from "path";
 
 const DAY = 86_400_000;
+const unauthorized = HttpResponse.builder()
+    .status(HttpCode.Unauthorized)
+    .json({
+        success: false,
+        message: "Unauthorized."
+    } satisfies JSONResponse)
+    .build();
 
 const region = "us-east-1";
 const PAGE_URL = process.env.PAGE_URL;
@@ -91,23 +98,9 @@ const handler = async (event: APIGatewayProxyEventV2): Promise<ResponseObject> =
                     .build();
             }
         } catch (error) {
-            const response = HttpResponse.builder()
-                .status(HttpCode.Unauthorized)
-                .json({
-                    success: false,
-                    message: "Unauthorized."
-                } satisfies JSONResponse)
-                .build();
-            if (error instanceof TypeError) {
-                logger.error("One or more request cookies was malformed.");
-                return response;
-            } else if (error instanceof ExpiredTokenError) {
-                logger.error("Token expired.");
-                return response;
-            } else if (error instanceof InvalidTokenError) {
-                logger.error("Invalid token.");
-                return response;
-            }
+            if (error instanceof SyntaxError) return unauthorized;
+            if (error instanceof ExpiredTokenError) return unauthorized;
+            if (error instanceof InvalidTokenError) return unauthorized;
             throw error;
         }
 
