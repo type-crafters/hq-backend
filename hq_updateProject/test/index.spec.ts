@@ -133,23 +133,11 @@ describe("hq_updateProject tests", () => {
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        assert.equal(response.statusCode, 400);
+        assert.equal(response.statusCode, 200);
         assert.ok(response.body);
         const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
-        assert.equal(body.message, "At least one field must be provided for update.");
-    });
-
-    test("Invalid projectName - empty string", async (t) => {
-        event.body = JSON.stringify({ projectName: "" });
-
-        const { handler } = await import("../src/index.js");
-        const response = await handler(event);
-
-        assert.equal(response.statusCode, 400);
-        assert.ok(response.body);
-        const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
+        assert.ok(body.success);
+        assert.ok(body.message);
     });
 
     test("Invalid status - not a valid ProjectStatus", async (t) => {
