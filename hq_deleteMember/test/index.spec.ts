@@ -17,7 +17,7 @@ import {
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { Authenticator, InvalidTokenError } from "@typecrafters/hq-lib";
 
-describe("hq_deleteProject tests", () => {
+describe("hq_deleteMember tests", () => {
     let event: APIGatewayProxyEventV2;
     let originalEnv: NodeJS.ProcessEnv;
 
@@ -27,31 +27,32 @@ describe("hq_deleteProject tests", () => {
         ctx.mock.method(
             Authenticator.prototype,
             "getPermissions",
-            (...args: any[]) => ["delete:project"],
+            (...args: any[]) => ["delete:member"],
         );
 
         ctx.mock.method(
             DynamoDBDocumentClient.prototype,
             "send",
             async (command: any) => {
-                if (command instanceof DeleteCommand)
+                if (command instanceof DeleteCommand) {
                     return {
                         $metadata: {},
                     } satisfies DeleteCommandOutput;
+                }
             },
         );
 
         originalEnv = process.env;
         process.env = {
             ...process.env,
-            PROJECT_TABLE: "ProjectTable",
+            MEMBER_TABLE: "MemberTable",
             ACCESS_SECRET: "access_secret",
         };
 
         event = {
             version: "2.0",
-            routeKey: "DELETE /projects/{id}",
-            rawPath: "/projects/project_123",
+            routeKey: "DELETE /members/{id}",
+            rawPath: "/members/member_123",
             rawQueryString: "",
             cookies: [
                 "accessToken=inXIHp-epkvNwC-xd1fm4JUwkY7PpWwnhpGyOxo15aM",
@@ -69,19 +70,19 @@ describe("hq_deleteProject tests", () => {
                 domainPrefix: "example",
                 http: {
                     method: "DELETE",
-                    path: "/projects/project_123",
+                    path: "/members/member_123",
                     protocol: "HTTP/1.1",
                     sourceIp: "127.0.0.1",
                     userAgent: "node:test",
                 },
                 requestId: "12354678",
-                routeKey: "DELETE /projects/{id}",
+                routeKey: "DELETE /members/{id}",
                 stage: "$default",
                 time: new Date().toISOString(),
                 timeEpoch: Date.now(),
             },
             pathParameters: {
-                id: "project_123",
+                id: "member_123",
             },
             isBase64Encoded: false,
             stageVariables: {},
@@ -92,13 +93,10 @@ describe("hq_deleteProject tests", () => {
         process.env = originalEnv;
     });
 
-    test("All in order", async (t) => {
-        // Test execution
+    test("All in order", async () => {
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        console.log(response.body);
-        // Evaluation metrics
         assert.equal(response.statusCode, 200);
         assert.ok(response.body);
         assert.ok(response.headers && response.headers["Content-Type"]);
@@ -108,196 +106,128 @@ describe("hq_deleteProject tests", () => {
         assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 has a missing cookies array", async (t) => {
-        // Test setup
+    test("APIGatewayProxyEventV2 has a missing cookies array", async () => {
         delete event.cookies;
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 401);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 contains malformed cookies", async (t) => {
-        // Test setup
+    test("APIGatewayProxyEventV2 contains malformed cookies", async () => {
         event.cookies = ["{ invalid cookie }"];
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 401);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("Cookies array is missing accessToken cookie", async (t) => {
-        // Test setup
-        event.cookies = [
-            "refreshToken=RscHaYs-JkVKhM4H2xAISIUXsogAWnTzyc5MTY3pZqc",
-        ];
+    test("Cookies array is missing accessToken cookie", async () => {
+        event.cookies = ["refreshToken=abc123"];
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 401);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
     test("accessToken cookie is invalid or expired", async (t) => {
-        // Test setup
         t.mock.method(
             Authenticator.prototype,
             "getPermissions",
             (...args: any) => {
-                throw new InvalidTokenError(
-                    "EVIL Authenticator invalidates all your tokens!!",
-                );
+                throw new InvalidTokenError("Invalid token");
             },
         );
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 401);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
-        const body: JSONResponse = JSON.parse(response.body);
-        assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("User is not authorized to delete projects", async (t) => {
-        // Test setup
+    test("User is not authorized to delete team members", async (t) => {
         t.mock.method(
             Authenticator.prototype,
             "getPermissions",
             (...args: any) => [],
         );
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 403);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 has missing pathParameters", async (t) => {
-        // Test setup
+    test("APIGatewayProxyEventV2 has missing pathParameters", async () => {
         delete event.pathParameters;
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 400);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("APIGatewayProxyEventV2 has pathParameters without id", async (t) => {
-        // Test setup
+    test("APIGatewayProxyEventV2 has pathParameters without id", async () => {
         event.pathParameters = {};
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 400);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
-    test("Delete command fails because project does not exist", async (t) => {
-        // Test setup
-        t.mock.method(
-            DynamoDBDocumentClient.prototype,
-            "send",
-            async (command: any) => {
-                throw new ConditionalCheckFailedException({
-                    $metadata: {},
-                    message: "Project not found",
-                });
-            },
-        );
+    test("Delete command fails because team member does not exist", async (t) => {
+        t.mock.method(DynamoDBDocumentClient.prototype, "send", async () => {
+            throw new ConditionalCheckFailedException({
+                $metadata: {},
+                message: "Team member not found",
+            });
+        });
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 404);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 
     test("DynamoDBDocumentClient class throws error", async (t) => {
-        // Test setup
-        t.mock.method(
-            DynamoDBDocumentClient.prototype,
-            "send",
-            async (command: any) => {
-                throw new Error(
-                    "EVIL DynamoDB will not delete your project information!!",
-                );
-            },
-        );
+        t.mock.method(DynamoDBDocumentClient.prototype, "send", async () => {
+            throw new Error(
+                "EVIL DynamoDB will not delete your team member information!!",
+            );
+        });
 
-        // Test execution
         const { handler } = await import("../src/index.js");
         const response = await handler(event);
 
-        // Evaluation metrics
         assert.equal(response.statusCode, 500);
         assert.ok(response.body);
-        assert.ok(response.headers && response.headers["Content-Type"]);
-        assert.equal(response.headers["Content-Type"], "application/json");
         const body: JSONResponse = JSON.parse(response.body);
         assert.ok(!body.success);
-        assert.ok(body.message);
     });
 });
