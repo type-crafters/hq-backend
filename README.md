@@ -1,1 +1,0 @@
-# TypeCrafters HQ Serverless Backend
