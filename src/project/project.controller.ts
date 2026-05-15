@@ -1,9 +1,8 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UnauthorizedException, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ProjectService } from "./project.service";
 import { CreateProjectRequest } from "./dto/create-project-request.dto";
 import { UpdateProjectRequest } from "./dto/update-project-request.dto";
 import { User } from "@/common/decorator/user.decorator";
-import { ProtectedRoute } from "@/auth/protected-route.guard";
 import { RequiresPermission } from "@/common/decorator/requires-permission.decorator";
 import type { PaginationParams } from "@/common/dto/pagination-params.dto";
 
@@ -22,21 +21,18 @@ export class ProjectController {
     }
 
     @Post()
-    @UseGuards(ProtectedRoute)
     @RequiresPermission("create:project")
     public async createProject(@Body() request: CreateProjectRequest, @User("id") id: string) {
         await this.projectService.create(request, id);
     }
 
     @Patch(":id")
-    @UseGuards(ProtectedRoute)
     @RequiresPermission("update:project")
     public async updateProject(@Param("id") id: string, @Body() request: UpdateProjectRequest) {
         await this.projectService.update(id, request);
     }
 
     @Delete(":id")
-    @UseGuards(ProtectedRoute)
     @RequiresPermission("delete:project")
     public async deleteProject(@Param("id") id: string) {
         await this.projectService.delete(id);

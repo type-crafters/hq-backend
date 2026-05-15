@@ -1,18 +1,19 @@
 import { Module } from "@nestjs/common";
 import { UserController } from "./user.controller";
 import { UserService } from "./user.service";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { User } from "./user.entity";
 import { FileModule } from "@/file/file.module";
 import { MailModule } from "@/mail/mail.module";
-import { VerificationTokenModule } from "@/verification-token/verification-token.module";
+import { MongooseModule } from "@nestjs/mongoose";
+import { User, UserSchema } from "./user.schema";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([User]), 
+        MongooseModule.forFeature([{
+            name: User.name,
+            schema: UserSchema
+        }]),
         FileModule, 
-        MailModule, 
-        VerificationTokenModule
+        MailModule,
     ],
     controllers: [UserController],
     providers: [UserService],

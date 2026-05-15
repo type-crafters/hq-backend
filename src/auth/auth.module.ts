@@ -2,26 +2,18 @@ import { Module } from "@nestjs/common";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { UserModule } from "@/user/user.module";
-import { JwtModule } from "@nestjs/jwt";
-import { ConfigService } from "@nestjs/config";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { RefreshToken } from "./refresh-token.entity";
 import { VerificationTokenModule } from "@/verification-token/verification-token.module";
 import { MailModule } from "@/mail/mail.module";
+import { MongooseModule } from "@nestjs/mongoose";
+import { Session, SessionSchema } from "./session.schema";
 
 @Module({
     imports: [
+        MongooseModule.forFeature([{
+            name: Session.name,
+            schema: SessionSchema
+        }]),
         UserModule,
-        JwtModule.registerAsync({
-            global: true,
-            inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-                global: true,
-                secret: config.getOrThrow("ACCESS_SECRET"),
-                signOptions: { expiresIn: 900 }
-             })
-        }),
-        TypeOrmModule.forFeature([RefreshToken]),
         VerificationTokenModule,
         MailModule
     ],

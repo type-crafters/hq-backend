@@ -1,10 +1,13 @@
 import  { Module } from "@nestjs/common";
 import  { VerificationTokenService } from "./verification-token.service";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { VerificationToken } from "./verification-token.entity";
+import { MongooseModule } from "@nestjs/mongoose";
+import { VerificationToken, VerificationTokenSchema } from "./verification-token.schema";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([VerificationToken])],
+    imports: [MongooseModule.forFeature([{ 
+        name: VerificationToken.name, 
+        schema: VerificationTokenSchema 
+    }])],
     providers: [VerificationTokenService],
     exports: [VerificationTokenService]
 })

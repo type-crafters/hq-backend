@@ -1,85 +1,80 @@
 import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
 import { createHash, randomBytes } from "crypto";
-import { VerificationToken } from "./verification-token.entity";
-import { MongoRepository } from "typeorm";
-import { TokenType } from "./token-type.enum";
+import { InjectModel } from "@nestjs/mongoose";
+import type { Model } from "mongoose";
+import { VerificationToken, type VerificationTokenDocument } from "./verification-token.schema";
+import { TokenType } from "./dto/token-type.enum";
+import { Duration } from "@/common/class/duration";
 
 @Injectable()
 export class VerificationTokenService {
-    constructor(@InjectRepository(VerificationToken) private readonly tokenRepository: MongoRepository<VerificationToken>) { }
+    constructor(
+        @InjectModel(VerificationToken.name) private readonly tokenModel: Model<VerificationTokenDocument>
+    ) { }
 
     public hash(token: string): string {
-        return createHash("sha256").update(token).digest("hex");
+        return createHash("sha256")
+            .update(token)
+            .digest("hex");
     }
 
-    public async createForEmail(sub: string): Promise<string> {
-        const random = randomBytes(32).toString("hex");
-        const hash = this.hash(random);
+    public async createForEmail(uid: string): Promise<string> {
+        const ttl = Duration.ofDays(1).toSeconds();
+        return await this.create(uid, TokenType.EmailVerification, ttl);
+    }
 
-        const token = this.tokenRepository.create({
+    public async createForPassword(uid: string): Promise<string> {
+        const ttl = Duration.ofHours(1).toSeconds()
+        return await this.create(uid, TokenType.PasswordReset, ttl);
+    }
+
+    private async create(uid: string, type: TokenType, ttlSeconds: number): Promise<string> {
+        const token = randomBytes(32).toString("hex");
+        const hash = this.hash(token);
+        const expiresAt = Duration.ofSeconds(ttlSeconds).fromNow();
+
+        await this.tokenModel.create({
             hash,
-            sub,
-            type: TokenType.EmailVerification,
-            expiresAt: new Date(Date.now() + 86_400 * 1_000)
+            uid,
+            type,
+            expiresAt
         });
 
-        await this.tokenRepository.save(token);
-        return random;
+        return token;
     }
 
-    public async createForPassword(sub: string): Promise<string> {
-        const random = randomBytes(32).toString("hex");
-        const hash = this.hash(random);
-
-        const token = this.tokenRepository.create({
-            hash,
-            sub,
-            type: TokenType.PasswordReset,
-            expiresAt: new Date(Date.now() + 3_600 * 1_000)
-        });
-
-        await this.tokenRepository.save(token);
-        return random;
+    public async isValidEmailToken(input: string, uid: string): Promise<boolean> {
+        return await this.validate(input, uid, TokenType.EmailVerification);
     }
 
-    public async isValidEmailToken(input: string, sub: string): Promise<boolean> {
+    public async isValidPasswordToken(input: string, uid: string): Promise<boolean> {
+        return await this.validate(input, uid, TokenType.PasswordReset);
+    }
+
+    private async validate(input: string, uid: string, type: TokenType): Promise<boolean> {
         const hash = this.hash(input);
+        const token = await this.tokenModel.findOne({ hash });
 
-        const token = await this.tokenRepository.findOneBy({ hash });
+        if (!token) {
+            return false;
+        }
 
-        const now = new Date();
+        const expired = token.expiresAt.getTime() <= Date.now();
 
-        if (!token) return false;
-        if (token.expiresAt < now) return false;
-        if (token.type !== TokenType.EmailVerification) return false;
-        if (token.sub !== sub) return false;
+        if (expired) {
+            await this.tokenModel.deleteOne({ _id: token.id});
+            return false;
+        }
 
-        await this.tokenRepository.delete({
-            sub,
-            type: TokenType.EmailVerification
-        });
+        if (token.type !== type) {
+            return false;
+        }
 
-        return true;
-    }
+        if (token.uid !== uid) {
+            return false;
+        }
 
-    public async isValidPasswordToken(input: string, sub: string): Promise<boolean> {
-        const hash = this.hash(input);
-
-        const token = await this.tokenRepository.findOneBy({ hash });
-
-        const now = new Date();
-
-        if (!token) return false;
-        if (token.expiresAt < now) return false;
-        if (token.type !== TokenType.PasswordReset) return false;
-        if (token.sub !== sub) return false;
-
-        await this.tokenRepository.delete({
-            sub,
-            type: TokenType.PasswordReset
-        });
-
+        await this.tokenModel.deleteMany({ uid, type });
         return true;
     }
 }

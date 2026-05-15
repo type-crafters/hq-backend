@@ -1,4 +1,4 @@
-import type { User } from "../user.entity";
+import type { User } from "../user.schema";
 import type { ColorScheme } from "./color-scheme.enum";
 
 interface PublicUserArgs {

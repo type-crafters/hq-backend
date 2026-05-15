@@ -1,27 +1,30 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { UserService } from "@/user/user.service";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import bcrypt from "bcrypt";
-import { JwtService } from "@nestjs/jwt";
+import { createHash, randomBytes } from "crypto";
 import { ConfigService } from "@nestjs/config";
-import { InjectRepository } from "@nestjs/typeorm";
-import { RefreshToken } from "./refresh-token.entity";
-import { MongoRepository } from "typeorm";
-import { randomUUID } from "node:crypto";
-import type { AccessClaims } from "@/common/interface/access-claims.interface";
-import { VerificationTokenService } from "@/verification-token/verification-token.service";
+import { InjectModel } from "@nestjs/mongoose";
+import { Types, type Model } from "mongoose";
+import { UserService } from "@/user/user.service";
 import { MailService } from "@/mail/mail.service";
-import type { RefreshClaims } from "@/common/interface/refresh-claims.interface";
+import { Duration } from "@/common/class/duration";
+import { Session, type SessionDocument } from "./session.schema";
+import { VerificationTokenService } from "@/verification-token/verification-token.service";
 
 @Injectable()
 export class AuthService {
     constructor(
-        @InjectRepository(RefreshToken) private readonly refreshTokenRepository: MongoRepository<RefreshToken>,
+        @InjectModel(Session.name) private readonly sessionModel: Model<SessionDocument>,
         private readonly userService: UserService,
-        private readonly jwtService: JwtService,
         private readonly tokenService: VerificationTokenService,
         private readonly mailService: MailService,
         private readonly config: ConfigService
     ) { }
+
+    private hashSessionid(jssessid: string): string {
+        return createHash("sha256")
+            .update(jssessid)
+            .digest("hex");
+    }
 
     public async authenticateUser(
         email: string,
@@ -29,182 +32,167 @@ export class AuthService {
         rememberMe: boolean,
         userAgent: string,
         ipAddress: string
-    ) {
+    ): Promise<string> {
         const unauthorized = new UnauthorizedException("Unauthorized.");
-        const user = await this.userService.getByEmail(email);
+        const optionalUser = await this.userService.getByEmail(email);
 
-        if (user === null) throw unauthorized;
-        if (!(await bcrypt.compare(password, user.password))) throw unauthorized;
+        if (!optionalUser.isPresent()) {
+            throw unauthorized;
+        }
 
-        const payload = {
-            id: user.id.toString(),
-            email: user.email,
-            permissions: user.permissions
-        } satisfies AccessClaims;
+        const user = optionalUser.get();
 
+        if (!(await bcrypt.compare(password, user.password))) {
+            throw unauthorized;
+        }
 
-        const accessToken = await this.jwtService.signAsync(payload);
+        const jssessid = randomBytes(32).toString("base64url");
+        const expiresAt = Duration.ofDays(rememberMe ? 90 : 7).fromNow();
 
-        const jti = randomUUID();
-        const ttl = (rememberMe ? 90 : 7) * 86_400;
-        const refreshToken = await this.jwtService.signAsync(payload, {
-            secret: this.config.getOrThrow("REFRESH_SECRET"),
-            expiresIn: ttl,
-            jwtid: jti
+        await this.sessionModel.create({
+            jssessid: this.hashSessionid(jssessid),
+            uid: user.id,
+            userAgent,
+            ipAddress,
+            expiresAt,
         });
-
-        await this.refreshTokenRepository.save(
-            this.refreshTokenRepository.create({
-                sub: user.id.toString(),
-                jti,
-                expiresAt: new Date(Date.now() + ttl * 1_000),
-                ipAddress,
-                userAgent
-            })
-        );
-
-        return { accessToken, refreshToken };
+        
+        return jssessid;
     }
 
-    public async refreshSession(
-        refreshToken: string | undefined,
+    public async validateSession(
+        jssessid: string,
         userAgent: string,
-        ipAddress: string,
+        ipAddress: string
     ) {
         const unauthorized = new UnauthorizedException("Unauthorized.");
-        if (refreshToken == null || refreshToken.length === 0) throw unauthorized;
 
-        let claims: RefreshClaims;
-
-        try {
-            claims = await this.jwtService.verifyAsync<RefreshClaims>(
-                refreshToken,
-                { secret: this.config.getOrThrow("REFRESH_SECRET") },
-            );
-        } catch {
+        if (!jssessid) {
             throw unauthorized;
         }
 
-        if (claims.jti == null || claims.id == null) throw unauthorized;
-
-        const session = await this.refreshTokenRepository.findOneBy({
-            jti: claims.jti,
-            sub: claims.id,
+        const session = await this.sessionModel.findOne({
+            jssessid:  this.hashSessionid(jssessid)
         });
-        if (session == null) throw unauthorized;
+
+        if (!session) {
+            throw unauthorized;
+        }
+
         if (session.expiresAt.getTime() <= Date.now()) {
-            await this.refreshTokenRepository.deleteOne({ jti: session.jti });
+            await this.sessionModel.deleteOne({ _id: session._id });
             throw unauthorized;
         }
 
-        if (
-            session.userAgent !== userAgent ||
-            session.ipAddress !== ipAddress
-        ) {
-            await this.refreshTokenRepository.deleteOne({ jti: session.jti });
+        if (session.userAgent !== userAgent || session.ipAddress !== ipAddress) {
+            await this.sessionModel.deleteOne({ _id: session._id });
             throw unauthorized;
         }
 
-        const user = await this.userService.getById(claims.id);
-        if (user == null) {
-            await this.refreshTokenRepository.deleteOne({ jti: session.jti });
-            throw unauthorized;
-        }
-
-        const payload = {
-            id: user.id.toString(),
-            email: user.email,
-            permissions: user.permissions,
-        } satisfies AccessClaims;
-
-        const accessToken = await this.jwtService.signAsync(payload);
-
-        const ttl = Math.floor(
-            (session.expiresAt.getTime() - Date.now()) / 1_000,
-        );
-        if (ttl <= 0) {
-            await this.refreshTokenRepository.deleteOne({ jti: session.jti });
-            throw unauthorized;
-        }
-
-        const newJti = randomUUID();
-        const newRefreshToken = await this.jwtService.signAsync(payload, {
-            secret: this.config.getOrThrow("REFRESH_SECRET"),
-            expiresIn: ttl,
-            jwtid: newJti,
-        });
-
-        await this.refreshTokenRepository.deleteOne({ jti: session.jti });
-        await this.refreshTokenRepository.save(
-            this.refreshTokenRepository.create({
-                sub: user.id.toString(),
-                jti: newJti,
-                expiresAt: new Date(Date.now() + ttl * 1_000),
-                ipAddress,
-                userAgent,
-            }),
-        );
-
-        return {
-            accessToken,
-            refreshToken: newRefreshToken,
-            refreshTokenMaxAge: ttl * 1_000,
-        };
-    }
-
-    public async verifyEmail(sub: string, token: string) {
-        const badRequest = new BadRequestException("Unable to validate token.");
-        const isValid = await this.tokenService.isValidEmailToken(token, sub);
-
-        if (!isValid) throw badRequest;
-
-        try {
-            await this.userService.activateById(sub);
-        } catch (error) {
-            if (error instanceof NotFoundException) throw badRequest;
-            throw new InternalServerErrorException("Failed to activate user account.");
-        }
-    }
-
-    public async sendPasswordResetLink(email: string) {
-        const user = await this.userService.getByEmail(email);
-        if (user !== null) {
-            const sub = user.id.toString();
-            const token = await this.tokenService.createForPassword(sub);
-
-            const url = new URL("/password/reset", this.config.getOrThrow("PAGE_URL"));
-
-            url.searchParams.set("sub", sub);
-            url.searchParams.set("token", token);
-
-            await this.mailService.renderAndSend(
-                email,
-                "Your password reset request",
-                "reset-password.ejs",
-                { firstName: user.firstName, url: url.toString() }
+        const optionalUser = await this.userService.getById(
+                session.uid.toString()
             );
+
+        if (!optionalUser.isPresent()) {
+            await this.sessionModel.deleteOne({ _id: session._id });
+
+            throw unauthorized;
+        }
+
+        await session.save();
+        return optionalUser.get();
+    }
+
+    public async logout(jssessid: string): Promise<void> {
+        await this.sessionModel.deleteOne({
+            jssessid:
+                this.hashSessionid(jssessid)
+        });
+    }
+
+    public async revokeUserSessions(uid: string): Promise<void> {
+        await this.sessionModel.deleteMany({ uid: new Types.ObjectId(uid) });
+    }
+
+    public async verifyEmail(
+        sub: string,
+        token: string
+    ): Promise<void> {
+        const badRequest =
+            new BadRequestException(
+                "Unable to validate token."
+            );
+
+        const isValid =
+            await this.tokenService
+                .isValidEmailToken(token, sub);
+
+        if (!isValid) {
+            throw badRequest;
+        }
+
+        const updated =
+            await this.userService
+                .activateById(sub);
+
+        if (!updated.isPresent()) {
+            throw badRequest;
         }
     }
 
-    public async verifyPasswordReset(sub: string, token: string) {
-        const badRequest = new BadRequestException("Unable to validate token.");
-        const isValid = await this.tokenService.isValidPasswordToken(token, sub);
+    public async sendPasswordResetLink(email: string): Promise<void> {
+        const optionalUser = await this.userService.getByEmail(email);
 
-        if (!isValid) throw badRequest;
+        if (!optionalUser.isPresent()) {
+            return;
+        }
+
+        const user = optionalUser.get();
+        const sub = user.id.toString();
+        const token = await this.tokenService.createForPassword(sub);
+
+        const url = new URL(
+            "/password/reset",
+            this.config.getOrThrow("PAGE_URL")
+        );
+
+        url.searchParams.set("sub", sub);
+
+        url.searchParams.set(
+            "token",
+            token
+        );
+
+        await this.mailService.renderAndSend(
+            email,
+            "Your password reset request",
+            "reset-password.ejs",
+            {
+                firstName: user.firstName,
+
+                url: url.toString()
+            }
+        );
+    }
+
+    public async verifyPasswordReset( sub: string, token: string) {
+        const badRequest = new BadRequestException("Unable to validate token.");
+
+        const isValid = await this.tokenService .isValidPasswordToken(token, sub);
+
+        if (!isValid) {
+            throw badRequest;
+        }
 
         return { sub };
     }
 
-    public async resetUserPassword(id: string, password: string, confirmPassword: string) {
-        if (password !== confirmPassword)
+    public async resetUserPassword(id: string, password: string, confirmPassword: string): Promise<void> {
+        if (password !== confirmPassword) {
             throw new BadRequestException("Passwords do not match.");
+        }
 
         const hash = await bcrypt.hash(password, 10);
-
-        this.userService.updatePasswordById(id, hash);
-    }
-
-    public async revokeUserSession(id: string, ipAddress: string) {
-        await this.refreshTokenRepository.delete({ sub: id, ipAddress })
+        await this.userService.updatePasswordById(id, hash);
     }
 }

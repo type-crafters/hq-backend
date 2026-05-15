@@ -1,85 +1,125 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Message } from "./message.entity";
-import { MongoRepository } from "typeorm";
+import {
+    Injectable,
+    InternalServerErrorException
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { Message, type MessageDocument } from "./message.schema";
 import { SendMessageRequest } from "./dto/send-message-request.dto";
 import { MessageStatus } from "./dto/message-status.enum";
-import { ObjectId } from "mongodb";
 import { MailService } from "@/mail/mail.service";
+import { Optional } from "@/common/class/optional";
 
 @Injectable()
 export class MessageService {
     constructor(
-        @InjectRepository(Message) private readonly messageRepository: MongoRepository<Message>,
+        @InjectModel(Message.name) private readonly messageModel: Model<MessageDocument>,
         private readonly mailService: MailService
     ) { }
 
-    public async create(request: SendMessageRequest): Promise<Message> {
-        const now = new Date();
-
-        const message: Message = this.messageRepository.create({
-            firstName: request.firstName,
-            lastName: request.lastName,
-            subject: request.subject,
-            mailTo: request.email,
+    public async create(request: SendMessageRequest): Promise<MessageDocument> {
+        return await this.messageModel.create({
+            ...request,
             status: MessageStatus.Received,
             sentAt: new Date(request.sentAt),
-            receivedAt: now
+            receivedAt: new Date()
         });
-
-        return await this.messageRepository.save(message);
     }
 
-    public async list(page: number, limit: number): Promise<Array<Message>> {
+    public async list(page: number, limit: number): Promise<MessageDocument[]> {
         const maxLimit = 24;
         const clamp = Math.min(limit, maxLimit);
+
         try {
-            return await this.messageRepository.find({
-                skip: clamp * (page - 1),
-                take: clamp,
-                order: { sentAt: -1 }
-            });
+            return await this.messageModel
+                .find()
+                .sort({ sentAt: -1 })
+                .skip(clamp * (page - 1))
+                .limit(clamp)
+                .exec();
         } catch {
-            throw new InternalServerErrorException("Failed to fetch message list.");
+            throw new InternalServerErrorException(
+                "Failed to fetch message list."
+            );
         }
     }
 
-    public async get(id: string): Promise<Message> {
-        const notFound = new NotFoundException("Message '" + id + "' not found.");
-        if (!ObjectId.isValid(id)) throw notFound;
+    public async get(id: string): Promise<Optional<MessageDocument>> {
+        if (!Types.ObjectId.isValid(id)) {
+            return Optional.empty();
+        }
 
-        const message = await this.messageRepository.findOneBy({ _id: new ObjectId(id) });
-        if (message == null) throw notFound;
+        const message = await this.messageModel
+            .findById(id)
+            .exec();
 
-        return message;
+        if (!message) {
+            return Optional.empty();
+        }
+
+        return Optional.of(message);
     }
 
-    public async markAsRead(id: string): Promise<void> {
-        const notFound = new NotFoundException("Message '" + id + "' not found.");
-        if (!ObjectId.isValid(id)) throw notFound;
+    public async markAsRead(id: string): Promise<Optional<MessageDocument>> {
+        if (!Types.ObjectId.isValid(id)) {
+            return Optional.empty();
+        }
 
         try {
-            const result = await this.messageRepository.updateOne(
-                { _id: new ObjectId(id) },
-                { $set: { status: MessageStatus.Read } }
+            const message =
+                await this.messageModel.findById(id);
+
+            if (!message) {
+                return Optional.empty();
+            }
+
+            message.status = MessageStatus.Read;
+
+            const saved = await message.save();
+
+            return Optional.of(saved);
+        } catch {
+            throw new InternalServerErrorException(
+                "Failed to mark message as read."
+            );
+        }
+    }
+
+    public async reply(
+        id: string,
+        reply: string,
+        adminId: string
+    ): Promise<Optional<MessageDocument>> {
+        const optionalMessage = await this.get(id);
+
+        if (!optionalMessage.isPresent()) {
+            return Optional.empty();
+        }
+
+        const message = optionalMessage.get();
+
+        try {
+            await this.mailService.sendText(
+                message.mailTo,
+                "Your inquiry @ TypeCraftersHQ",
+                reply
             );
 
-            if (result.matchedCount === 0) throw notFound;
+            message.status = MessageStatus.Replied;
+
+            message.repliedAt = new Date();
+
+            message.repliedBy = adminId;
+
+            const saved = await message.save();
+
+            return Optional.of(saved);
         } catch {
-            throw new InternalServerErrorException("Failed to mark message as read.");
+            throw new InternalServerErrorException(
+                "Failed to reply to message."
+            );
         }
     }
 
-    public async reply(id: string, reply: string, adminId: string): Promise<void> {
-        const message = await this.get(id);
-
-        try {
-            await this.mailService.sendText(message.mailTo, "Your inquiry @ TypeCraftersHQ", reply);
-            await this.messageRepository.updateOne({ _id: message.id }, {
-                $set: { status: MessageStatus.Replied, repliedAt: new Date(), repliedBy: adminId }
-            });
-        } catch {
-            throw new InternalServerErrorException("Failed to reply to message.");
-        }
-    }
 }
+

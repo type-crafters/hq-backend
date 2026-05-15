@@ -1,12 +1,18 @@
 import { Module } from "@nestjs/common";
 import { MessageController } from "./message.controller";
 import { MessageService } from "./message.service";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { Message } from "./message.entity";
 import { MailModule } from "@/mail/mail.module";
+import { MongooseModule } from "@nestjs/mongoose";
+import { Message, MessageSchema } from "./message.schema";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Message]), MailModule],
+    imports: [
+        MongooseModule.forFeature([{
+            name: Message.name,
+            schema: MessageSchema
+        }]), 
+        MailModule
+    ],
     controllers: [MessageController],
     providers: [MessageService]
 })
