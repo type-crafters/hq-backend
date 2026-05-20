@@ -14,30 +14,23 @@ export class ProjectService {
         private readonly fileService: FileService
     ) { }
 
-    public async list(page: number, limit: number): Promise<ProjectDocument[]> {
-        const maxLimit = 24;
+    public async list(page: number, limit: number): Promise<[Array<Project>, number, number, number]> {
+        const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+        const safeLimit = Number.isFinite(limit) ? Math.floor(limit) : 10;
+        const clampedLimit = Math.min(48, Math.max(1, safeLimit));
+        const skip = (safePage - 1) * clampedLimit;
 
-        const clamp = Math.min(limit, maxLimit);
+        const [result, total] = await Promise.all([
+            this.projectModel.find().skip(skip).limit(clampedLimit).exec(),
+            this.projectModel.countDocuments().exec(),
+        ]);
 
-        try {
-            const projects = await this.projectModel
-                .find()
-                .sort({ createdAt: "desc" })
-                .skip(clamp * (page - 1))
-                .limit(clamp)
-                .exec();
+        const projects = await Promise.all(result.map(async p => {
+            p.thumbnailUrl = await this.fileService.getSignedUrl(p.thumbnailUrl);
+            return p;
+        }));
 
-            return await Promise.all(
-                projects.map(async (p) => {
-                    p.thumbnailUrl = await this.fileService.getSignedUrl(
-                        p.thumbnailUrl
-                    );
-                    return p;
-                })
-            );
-        } catch {
-            throw new InternalServerErrorException("Failed to fetch project list.");
-        }
+        return [projects, skip, clampedLimit, total];
     }
 
     public async get(

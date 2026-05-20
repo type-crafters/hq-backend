@@ -35,6 +35,10 @@ export class Message {
 
     @Prop()
     public repliedBy!: string;
+    
+    public createdAt!: Date;
+    
+    public updatedAt!: Date;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

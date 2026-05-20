@@ -19,6 +19,10 @@ export class Session {
 
     @Prop()
     public expiresAt!: Date;
+    
+    public createdAt!: Date;
+    
+    public updatedAt!: Date;
 }
 
 export const SessionSchema = SchemaFactory.createForClass(Session);

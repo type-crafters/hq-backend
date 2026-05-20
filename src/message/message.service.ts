@@ -26,17 +26,24 @@ export class MessageService {
         });
     }
 
-    public async list(page: number, limit: number): Promise<MessageDocument[]> {
-        const maxLimit = 24;
-        const clamp = Math.min(limit, maxLimit);
+    public async list(page: number, limit: number): Promise<[Array<MessageDocument>, number, number, number]> {
+        const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+        const safeLimit = Number.isFinite(limit) ? Math.floor(limit) : 10;
+        const clampedLimit = Math.min(48, Math.max(1, safeLimit));
+        const skip = (safePage - 1) * clampedLimit;
 
         try {
-            return await this.messageModel
-                .find()
-                .sort({ sentAt: -1 })
-                .skip(clamp * (page - 1))
-                .limit(clamp)
-                .exec();
+            const [result, total] = await Promise.all([
+                this.messageModel
+                    .find()
+                    .sort({ sentAt: -1 })
+                    .skip(skip)
+                    .limit(clampedLimit)
+                    .exec(),
+                this.messageModel.countDocuments().exec(),
+            ]);
+
+            return [result, skip, clampedLimit, total];
         } catch {
             throw new InternalServerErrorException(
                 "Failed to fetch message list."

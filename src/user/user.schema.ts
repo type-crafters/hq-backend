@@ -29,6 +29,10 @@ export class User {
 
     @Prop()
     public permissions!: string[];
+
+    public createdAt!: Date;
+    
+    public updatedAt!: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

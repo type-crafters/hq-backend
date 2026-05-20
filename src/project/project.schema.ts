@@ -28,7 +28,11 @@ export class Project {
     public href!: string;
 
     @Prop()
-    public createdBy!: string;
+    public createdBy!: Types.ObjectId;
+    
+    public createdAt!: Date;
+    
+    public updatedAt!: Date;
 }
 
 export const ProjectSchema = SchemaFactory.createForClass(Project);

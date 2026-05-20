@@ -9,6 +9,7 @@ import { MailService } from "@/mail/mail.service";
 import { Duration } from "@/common/class/duration";
 import { Session, type SessionDocument } from "./session.schema";
 import { VerificationTokenService } from "@/verification-token/verification-token.service";
+import { UserStatus } from "@/user/dto/user-status.enum";
 
 @Injectable()
 export class AuthService {
@@ -17,13 +18,11 @@ export class AuthService {
         private readonly userService: UserService,
         private readonly tokenService: VerificationTokenService,
         private readonly mailService: MailService,
-        private readonly config: ConfigService
+        private readonly config: ConfigService,
     ) { }
 
-    private hashSessionid(jssessid: string): string {
-        return createHash("sha256")
-            .update(jssessid)
-            .digest("hex");
+    private hashSessionId(jssessid: string): string {
+        return createHash("sha256").update(jssessid).digest("hex");
     }
 
     public async authenticateUser(
@@ -31,53 +30,47 @@ export class AuthService {
         password: string,
         rememberMe: boolean,
         userAgent: string,
-        ipAddress: string
+        ipAddress: string,
     ): Promise<string> {
         const unauthorized = new UnauthorizedException("Unauthorized.");
         const optionalUser = await this.userService.getByEmail(email);
 
-        if (!optionalUser.isPresent()) {
-            throw unauthorized;
-        }
+        if (!optionalUser.isPresent()) throw unauthorized;
 
         const user = optionalUser.get();
 
-        if (!(await bcrypt.compare(password, user.password))) {
-            throw unauthorized;
-        }
+        if (!user.password) throw unauthorized;
+
+        if (!(await bcrypt.compare(password, user.password))) throw unauthorized;
 
         const jssessid = randomBytes(32).toString("base64url");
         const expiresAt = Duration.ofDays(rememberMe ? 90 : 7).fromNow();
 
         await this.sessionModel.create({
-            jssessid: this.hashSessionid(jssessid),
-            uid: user.id,
+            jssessid: this.hashSessionId(jssessid),
+            uid: user._id,
             userAgent,
             ipAddress,
             expiresAt,
         });
-        
+
         return jssessid;
     }
 
     public async validateSession(
         jssessid: string,
         userAgent: string,
-        ipAddress: string
+        ipAddress: string,
     ) {
         const unauthorized = new UnauthorizedException("Unauthorized.");
 
-        if (!jssessid) {
-            throw unauthorized;
-        }
+        if (!jssessid) throw unauthorized;
 
         const session = await this.sessionModel.findOne({
-            jssessid:  this.hashSessionid(jssessid)
+            jssessid: this.hashSessionId(jssessid),
         });
 
-        if (!session) {
-            throw unauthorized;
-        }
+        if (!session) throw unauthorized;
 
         if (session.expiresAt.getTime() <= Date.now()) {
             await this.sessionModel.deleteOne({ _id: session._id });
@@ -89,13 +82,10 @@ export class AuthService {
             throw unauthorized;
         }
 
-        const optionalUser = await this.userService.getById(
-                session.uid.toString()
-            );
+        const optionalUser = await this.userService.get(session.uid.toString());
 
         if (!optionalUser.isPresent()) {
             await this.sessionModel.deleteOne({ _id: session._id });
-
             throw unauthorized;
         }
 
@@ -104,95 +94,105 @@ export class AuthService {
     }
 
     public async logout(jssessid: string): Promise<void> {
-        await this.sessionModel.deleteOne({
-            jssessid:
-                this.hashSessionid(jssessid)
-        });
+        await this.sessionModel.deleteOne({ jssessid: this.hashSessionId(jssessid) });
     }
 
     public async revokeUserSessions(uid: string): Promise<void> {
         await this.sessionModel.deleteMany({ uid: new Types.ObjectId(uid) });
     }
 
-    public async verifyEmail(
-        sub: string,
-        token: string
-    ): Promise<void> {
-        const badRequest =
-            new BadRequestException(
-                "Unable to validate token."
-            );
+    // --- Account creation flow ---
 
-        const isValid =
-            await this.tokenService
-                .isValidEmailToken(token, sub);
+    public async sendVerificationEmail(uid: string, email: string, firstName: string): Promise<void> {
+        const token = await this.tokenService.createForEmail(uid);
+        const url = new URL("/hq/users/email/verify", this.config.getOrThrow<string>("PAGE_URL"));
+        url.searchParams.set("uid", uid);
+        url.searchParams.set("token", token);
 
-        if (!isValid) {
-            throw badRequest;
-        }
-
-        const updated =
-            await this.userService
-                .activateById(sub);
-
-        if (!updated.isPresent()) {
-            throw badRequest;
-        }
+        await this.mailService.renderAndSend(email, "Verify your email address.", "verify-email.ejs", {
+            url: url.toString(),
+            firstName,
+        });
     }
+
+    public async activateUserAccount(
+        uid: string,
+        token: string,
+        password: string,
+        confirmPassword: string,
+    ): Promise<void> {
+        const unauthorized = new UnauthorizedException("Unauthorized.");
+
+        if (!(await this.tokenService.validateEmailToken(token, uid))) throw unauthorized;
+
+        if (password !== confirmPassword) throw new BadRequestException("Passwords do not match.");
+
+        const optionalUser = await this.userService.get(uid);
+        if (!optionalUser.isPresent()) throw unauthorized;
+
+        const user = optionalUser.get();
+        if (user.password) throw unauthorized; // already activated
+
+        await this.userService.activateAccount(uid, password);
+        await this.tokenService.consumeEmailToken(token, uid);
+    }
+
+    // --- Email verification flow (existing users) ---
+
+    public async verifyEmail(uid: string, token: string): Promise<void> {
+        const unauthorized = new UnauthorizedException("Unauthorized.");
+
+        const optionalUser = await this.userService.get(uid);
+        if (!optionalUser.isPresent()) throw unauthorized;
+
+        if (!(await this.tokenService.validateEmailToken(token, uid))) throw unauthorized;
+
+        await this.userService.setStatus(uid, UserStatus.Active);
+        await this.tokenService.consumeEmailToken(token, uid);
+    }
+
+    // --- Password reset flow ---
 
     public async sendPasswordResetLink(email: string): Promise<void> {
         const optionalUser = await this.userService.getByEmail(email);
-
-        if (!optionalUser.isPresent()) {
-            return;
-        }
+        if (!optionalUser.isPresent()) return; // silent no-op to prevent user enumeration
 
         const user = optionalUser.get();
-        const sub = user.id.toString();
-        const token = await this.tokenService.createForPassword(sub);
+        if (!user.password) return; // account not yet activated
 
-        const url = new URL(
-            "/password/reset",
-            this.config.getOrThrow("PAGE_URL")
-        );
+        const uid = user._id.toString();
+        const token = await this.tokenService.createForPassword(uid);
+        const url = new URL("/password/reset", this.config.getOrThrow<string>("PAGE_URL"));
+        url.searchParams.set("sub", uid);
+        url.searchParams.set("token", token);
 
-        url.searchParams.set("sub", sub);
-
-        url.searchParams.set(
-            "token",
-            token
-        );
-
-        await this.mailService.renderAndSend(
-            email,
-            "Your password reset request",
-            "reset-password.ejs",
-            {
-                firstName: user.firstName,
-
-                url: url.toString()
-            }
-        );
+        await this.mailService.renderAndSend(email, "Your password reset request", "reset-password.ejs", {
+            firstName: user.firstName,
+            url: url.toString(),
+        });
     }
 
-    public async verifyPasswordReset( sub: string, token: string) {
-        const badRequest = new BadRequestException("Unable to validate token.");
-
-        const isValid = await this.tokenService .isValidPasswordToken(token, sub);
-
-        if (!isValid) {
-            throw badRequest;
+    public async verifyPasswordResetToken(uid: string, token: string): Promise<{ sub: string }> {
+        if (!(await this.tokenService.validatePasswordToken(token, uid))) {
+            throw new BadRequestException("Unable to validate token.");
         }
 
-        return { sub };
+        return { sub: uid };
     }
 
-    public async resetUserPassword(id: string, password: string, confirmPassword: string): Promise<void> {
-        if (password !== confirmPassword) {
-            throw new BadRequestException("Passwords do not match.");
-        }
+    public async resetUserPassword(
+        uid: string,
+        token: string,
+        password: string,
+        confirmPassword: string,
+    ): Promise<void> {
+        const unauthorized = new UnauthorizedException("Unauthorized.");
 
-        const hash = await bcrypt.hash(password, 10);
-        await this.userService.updatePasswordById(id, hash);
+        if (!(await this.tokenService.validatePasswordToken(token, uid))) throw unauthorized;
+
+        if (password !== confirmPassword) throw new BadRequestException("Passwords do not match.");
+
+        await this.userService.updatePasswordById(uid, password);
+        await this.tokenService.consumePasswordToken(token, uid);
     }
 }

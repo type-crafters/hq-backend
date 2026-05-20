@@ -3,7 +3,7 @@ import { IsInt, IsOptional } from "class-validator";
 export class ResponseMetadata {
     @IsOptional()
     @IsInt()
-    public page?: number;
+    public offset?: number;
 
     @IsOptional()
     @IsInt()

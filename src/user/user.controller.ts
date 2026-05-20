@@ -22,7 +22,10 @@ export class UserController {
             return response;
         } catch (error) {
             if (error instanceof HttpException) throw error;
-
+            throw new InternalServerErrorException(
+                "An unexpected error occurred while creating the user.",
+                { cause: error }
+            );
         }
     }
 
@@ -31,7 +34,7 @@ export class UserController {
         try {
             const user = (await this.userService.get(id))
                 .orElseThrow(() => new NotFoundException("User not found."));
-            
+
             const response = ItemResponse.OK();
             response.message = "User retrieved successfully.";
             response.data = UserResponse.fromUser(user);
@@ -47,7 +50,7 @@ export class UserController {
     }
 
     @Get()
-    public async getUsers(@Pag("page") page: number, @Pag("limit") limit: number) {
+    public async listUsers(@Pag("page") page: number, @Pag("limit") limit: number) {
         try {
             const [users, skip, lim, total] = await this.userService.list(page, limit);
 
@@ -63,7 +66,7 @@ export class UserController {
             const metadata = new ResponseMetadata();
 
             metadata.limit = lim;
-            metadata.page = Math.floor(skip / limit);
+            metadata.offset = skip;
             metadata.total = total;
 
             response.data = users.map(UserResponse.fromUser);
