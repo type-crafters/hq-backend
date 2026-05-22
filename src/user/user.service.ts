@@ -45,7 +45,9 @@ export class UserService {
     }
 
     public async get(id: string): Promise<Optional<User>> {
-        return Optional.ofNullable(await this.userModel.findById(id).exec());
+        const user = await this.userModel.findById(id).exec();
+        if (user) user.profilePictureUrl = await this.fileService.getSignedUrl(user.profilePictureUrl);
+        return Optional.ofNullable(user);
     }
 
     public async getByEmail(email: string): Promise<Optional<User>> {
